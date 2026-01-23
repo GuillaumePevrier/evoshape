@@ -1,8 +1,11 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { Logo } from "@/components/logo";
 import { AppNavLink } from "@/components/app/nav-link";
 import { Button } from "@/components/ui/button";
+import { LogoutButton } from "@/components/app/logout-button";
+import { createSupabaseServerClient } from "@/src/lib/supabase/server";
 
 const navItems = [
   { href: "/app", label: "Dashboard", secondary: "Resume" },
@@ -13,7 +16,14 @@ const navItems = [
   { href: "/app/settings", label: "Notifications", secondary: "Push" },
 ];
 
-export default function AppLayout({ children }: { children: ReactNode }) {
+export default async function AppLayout({ children }: { children: ReactNode }) {
+  const supabase = await createSupabaseServerClient();
+  const { data } = await supabase.auth.getUser();
+
+  if (!data.user) {
+    redirect("/auth");
+  }
+
   return (
     <div className="min-h-screen pb-10">
       <header className="sticky top-0 z-20 border-b border-[var(--border)] bg-[var(--surface)]/90 backdrop-blur">
@@ -23,9 +33,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
             <Button href="/app/settings" variant="outline" size="sm">
               Parametres
             </Button>
-            <Button href="/auth" variant="ghost" size="sm">
-              Se deconnecter
-            </Button>
+            <LogoutButton />
           </div>
         </div>
       </header>
