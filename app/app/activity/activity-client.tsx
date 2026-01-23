@@ -1,7 +1,7 @@
 "use client";
 
 import type { FormEvent } from "react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -41,6 +41,16 @@ export default function ActivityClient({
   const [editType, setEditType] = useState("");
   const [editDuration, setEditDuration] = useState("");
   const [editCalories, setEditCalories] = useState("");
+  const [editStatus, setEditStatus] = useState<
+    "idle" | "saving" | "saved" | "error"
+  >("idle");
+
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastSavedRef = useRef<{
+    type: string;
+    duration: string;
+    calories: string;
+  } | null>(null);
 
   const totalBurned = useMemo(
     () =>
@@ -70,6 +80,14 @@ export default function ActivityClient({
     !caloriesError &&
     duration !== "" &&
     calories !== "";
+
+  useEffect(() => {
+    return () => {
+      if (saveTimerRef.current) {
+        clearTimeout(saveTimerRef.current);
+      }
+    };
+  }, []);
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -115,34 +133,52 @@ export default function ActivityClient({
   };
 
   const handleEdit = (entry: ActivityLog) => {
+    if (saveTimerRef.current) {
+      clearTimeout(saveTimerRef.current);
+    }
     setEditingId(entry.id);
     setEditType(entry.activity_type);
     setEditDuration(entry.duration_min ? String(entry.duration_min) : "");
     setEditCalories(entry.calories_burned ? String(entry.calories_burned) : "");
+    lastSavedRef.current = {
+      type: entry.activity_type,
+      duration: entry.duration_min ? String(entry.duration_min) : "",
+      calories: entry.calories_burned ? String(entry.calories_burned) : "",
+    };
+    setEditStatus("idle");
     setError(null);
   };
 
   const handleCancelEdit = () => {
+    if (saveTimerRef.current) {
+      clearTimeout(saveTimerRef.current);
+    }
     setEditingId(null);
     setEditType("");
     setEditDuration("");
     setEditCalories("");
+    setEditStatus("idle");
   };
 
-  const handleUpdate = async (entryId: number) => {
-    const updatedDuration = Number(editDuration);
-    const updatedCalories = Number(editCalories);
-
-    if (!editType.trim()) {
-      setError("Type requis.");
+  const handleAutoSave = async (
+    entryId: number,
+    nextType: string,
+    nextDuration: string,
+    nextCalories: string
+  ) => {
+    if (!nextType.trim() || nextDuration === "" || nextCalories === "") {
       return;
     }
+
+    const updatedDuration = Number(nextDuration);
+    const updatedCalories = Number(nextCalories);
+
     if (
       !updatedDuration ||
       updatedDuration < minDuration ||
       updatedDuration > maxDuration
     ) {
-      setError(`Duree entre ${minDuration} et ${maxDuration} min.`);
+      setEditStatus("error");
       return;
     }
     if (
@@ -150,32 +186,74 @@ export default function ActivityClient({
       updatedCalories < minCalories ||
       updatedCalories > maxCalories
     ) {
-      setError(`Calories entre ${minCalories} et ${maxCalories}.`);
+      setEditStatus("error");
       return;
     }
 
+    const lastSaved = lastSavedRef.current;
+    if (
+      lastSaved &&
+      lastSaved.type === nextType &&
+      lastSaved.duration === nextDuration &&
+      lastSaved.calories === nextCalories
+    ) {
+      return;
+    }
+
+    setEditStatus("saving");
     const supabase = createSupabaseBrowserClient();
     const { error: updateError } = await supabase
       .from("activity_logs")
       .update({
-        activity_type: editType.trim(),
+        activity_type: nextType.trim(),
         duration_min: updatedDuration,
         calories_burned: updatedCalories,
       })
       .eq("id", entryId);
 
     if (updateError) {
+      setEditStatus("error");
       setError(updateError.message);
       return;
     }
 
-    const { data } = await supabase
-      .from("activity_logs")
-      .select("id, activity_type, duration_min, calories_burned")
-      .eq("recorded_at", getISODate())
-      .order("created_at", { ascending: false });
-    setLogs((data ?? []) as ActivityLog[]);
-    handleCancelEdit();
+    lastSavedRef.current = {
+      type: nextType,
+      duration: nextDuration,
+      calories: nextCalories,
+    };
+    setLogs((prev) =>
+      prev.map((entry) =>
+        entry.id === entryId
+          ? {
+              ...entry,
+              activity_type: nextType.trim(),
+              duration_min: updatedDuration,
+              calories_burned: updatedCalories,
+            }
+          : entry
+      )
+    );
+    setError(null);
+    setEditStatus("saved");
+    setTimeout(() => setEditStatus("idle"), 1200);
+  };
+
+  const queueAutoSave = (
+    entryId: number,
+    nextType: string,
+    nextDuration: string,
+    nextCalories: string
+  ) => {
+    if (!entryId) {
+      return;
+    }
+    if (saveTimerRef.current) {
+      clearTimeout(saveTimerRef.current);
+    }
+    saveTimerRef.current = setTimeout(() => {
+      void handleAutoSave(entryId, nextType, nextDuration, nextCalories);
+    }, 700);
   };
 
   const handleDelete = async (entryId: number) => {
@@ -295,13 +373,35 @@ export default function ActivityClient({
                   <div className="flex flex-wrap items-center gap-3">
                     <Input
                       value={editType}
-                      onChange={(event) => setEditType(event.target.value)}
+                      onChange={(event) => {
+                        const nextValue = event.target.value;
+                        setEditType(nextValue);
+                        if (editingId) {
+                          queueAutoSave(
+                            editingId,
+                            nextValue,
+                            editDuration,
+                            editCalories
+                          );
+                        }
+                      }}
                       className="flex-1"
                     />
                     <Input
                       type="number"
                       value={editDuration}
-                      onChange={(event) => setEditDuration(event.target.value)}
+                      onChange={(event) => {
+                        const nextValue = event.target.value;
+                        setEditDuration(nextValue);
+                        if (editingId) {
+                          queueAutoSave(
+                            editingId,
+                            editType,
+                            nextValue,
+                            editCalories
+                          );
+                        }
+                      }}
                       className="w-28"
                       min={minDuration}
                       max={maxDuration}
@@ -309,18 +409,32 @@ export default function ActivityClient({
                     <Input
                       type="number"
                       value={editCalories}
-                      onChange={(event) => setEditCalories(event.target.value)}
+                      onChange={(event) => {
+                        const nextValue = event.target.value;
+                        setEditCalories(nextValue);
+                        if (editingId) {
+                          queueAutoSave(
+                            editingId,
+                            editType,
+                            editDuration,
+                            nextValue
+                          );
+                        }
+                      }}
                       className="w-28"
                       min={minCalories}
                       max={maxCalories}
                     />
                     <div className="flex items-center gap-2">
-                      <Button
-                        size="sm"
-                        onClick={() => handleUpdate(activity.id)}
-                      >
-                        Sauvegarder
-                      </Button>
+                      <span className="text-xs text-[var(--muted)]">
+                        {editStatus === "saving"
+                          ? "Enregistrement..."
+                          : editStatus === "saved"
+                            ? "Enregistre"
+                            : editStatus === "error"
+                              ? "Erreur"
+                              : "Auto-save actif"}
+                      </span>
                       <Button
                         size="sm"
                         variant="ghost"

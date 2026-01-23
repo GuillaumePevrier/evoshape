@@ -1,7 +1,7 @@
 "use client";
 
 import type { FormEvent } from "react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -37,6 +37,12 @@ export default function WeightClient({
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editWeight, setEditWeight] = useState("");
   const [editDate, setEditDate] = useState("");
+  const [editStatus, setEditStatus] = useState<
+    "idle" | "saving" | "saved" | "error"
+  >("idle");
+
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastSavedRef = useRef<{ weight: string; date: string } | null>(null);
 
   const delta7 = useMemo(() => calculateDelta7Days(entries), [entries]);
   const weightValue = Number(weight);
@@ -61,6 +67,14 @@ export default function WeightClient({
 
     setEntries((data ?? []) as WeightEntry[]);
   };
+
+  useEffect(() => {
+    return () => {
+      if (saveTimerRef.current) {
+        clearTimeout(saveTimerRef.current);
+      }
+    };
+  }, []);
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -107,49 +121,107 @@ export default function WeightClient({
   };
 
   const handleEdit = (entry: WeightEntry) => {
+    if (saveTimerRef.current) {
+      clearTimeout(saveTimerRef.current);
+    }
     setEditingId(entry.id);
     setEditWeight(String(entry.weight_kg));
     setEditDate(entry.recorded_at);
+    lastSavedRef.current = {
+      weight: String(entry.weight_kg),
+      date: entry.recorded_at,
+    };
+    setEditStatus("idle");
     setError(null);
   };
 
   const handleCancelEdit = () => {
+    if (saveTimerRef.current) {
+      clearTimeout(saveTimerRef.current);
+    }
     setEditingId(null);
     setEditWeight("");
     setEditDate("");
+    setEditStatus("idle");
   };
 
-  const handleUpdate = async (entryId: number) => {
-    const numericWeight = Number(editWeight);
+  const handleAutoSave = async (
+    entryId: number,
+    nextWeight: string,
+    nextDate: string
+  ) => {
+    const numericWeight = Number(nextWeight);
+    if (!nextDate) {
+      setEditStatus("error");
+      return;
+    }
     if (
       !numericWeight ||
       numericWeight < minWeight ||
       numericWeight > maxWeight
     ) {
-      setError(`Poids entre ${minWeight} et ${maxWeight} kg.`);
-      return;
-    }
-    if (!editDate) {
-      setError("Date requise.");
+      setEditStatus("error");
       return;
     }
 
+    const lastSaved = lastSavedRef.current;
+    if (
+      lastSaved &&
+      lastSaved.weight === nextWeight &&
+      lastSaved.date === nextDate
+    ) {
+      return;
+    }
+
+    setEditStatus("saving");
     const supabase = createSupabaseBrowserClient();
     const { error: updateError } = await supabase
       .from("weights")
       .update({
         weight_kg: numericWeight,
-        recorded_at: editDate,
+        recorded_at: nextDate,
       })
       .eq("id", entryId);
 
     if (updateError) {
+      setEditStatus("error");
       setError(updateError.message);
       return;
     }
 
-    await refreshEntries();
-    handleCancelEdit();
+    lastSavedRef.current = { weight: nextWeight, date: nextDate };
+    setEntries((prev) =>
+      [...prev]
+        .map((entry) =>
+          entry.id === entryId
+            ? { ...entry, weight_kg: numericWeight, recorded_at: nextDate }
+            : entry
+        )
+        .sort(
+          (a, b) =>
+            new Date(b.recorded_at).getTime() -
+            new Date(a.recorded_at).getTime()
+        )
+    );
+    setError(null);
+    setEditStatus("saved");
+    setTimeout(() => setEditStatus("idle"), 1200);
+  };
+
+  const queueAutoSave = (
+    entryId: number,
+    nextWeight: string,
+    nextDate: string
+  ) => {
+    if (!entryId) {
+      return;
+    }
+    if (saveTimerRef.current) {
+      clearTimeout(saveTimerRef.current);
+    }
+    saveTimerRef.current = setTimeout(() => {
+      void handleAutoSave(entryId, nextWeight, nextDate);
+    }, 700);
   };
 
   const handleDelete = async (entryId: number) => {
@@ -254,7 +326,13 @@ export default function WeightClient({
                     <Input
                       type="number"
                       value={editWeight}
-                      onChange={(event) => setEditWeight(event.target.value)}
+                      onChange={(event) => {
+                        const nextValue = event.target.value;
+                        setEditWeight(nextValue);
+                        if (editingId) {
+                          queueAutoSave(editingId, nextValue, editDate);
+                        }
+                      }}
                       className="w-32"
                       min={minWeight}
                       max={maxWeight}
@@ -262,16 +340,25 @@ export default function WeightClient({
                     <Input
                       type="date"
                       value={editDate}
-                      onChange={(event) => setEditDate(event.target.value)}
+                      onChange={(event) => {
+                        const nextValue = event.target.value;
+                        setEditDate(nextValue);
+                        if (editingId) {
+                          queueAutoSave(editingId, editWeight, nextValue);
+                        }
+                      }}
                       className="w-44"
                     />
                     <div className="flex items-center gap-2">
-                      <Button
-                        size="sm"
-                        onClick={() => handleUpdate(item.id)}
-                      >
-                        Sauvegarder
-                      </Button>
+                      <span className="text-xs text-[var(--muted)]">
+                        {editStatus === "saving"
+                          ? "Enregistrement..."
+                          : editStatus === "saved"
+                            ? "Enregistre"
+                            : editStatus === "error"
+                              ? "Erreur"
+                              : "Auto-save actif"}
+                      </span>
                       <Button
                         size="sm"
                         variant="ghost"

@@ -1,7 +1,7 @@
 "use client";
 
 import type { FormEvent } from "react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -71,6 +71,16 @@ export default function FoodClient({
   const [editLogCalories, setEditLogCalories] = useState("");
   const [editLogType, setEditLogType] =
     useState<MealLog["meal_type"]>("breakfast");
+  const [editStatus, setEditStatus] = useState<
+    "idle" | "saving" | "saved" | "error"
+  >("idle");
+
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastSavedRef = useRef<{
+    name: string;
+    calories: string;
+    type: MealLog["meal_type"];
+  } | null>(null);
 
   const totalCalories = useMemo(
     () =>
@@ -103,6 +113,14 @@ export default function FoodClient({
     mealName.trim().length > 0 &&
     !mealCaloriesError &&
     mealCalories !== "";
+
+  useEffect(() => {
+    return () => {
+      if (saveTimerRef.current) {
+        clearTimeout(saveTimerRef.current);
+      }
+    };
+  }, []);
 
   const resetTemplateForm = () => {
     setTemplateName("");
@@ -246,58 +264,117 @@ export default function FoodClient({
   };
 
   const handleLogEdit = (log: MealLog) => {
+    if (saveTimerRef.current) {
+      clearTimeout(saveTimerRef.current);
+    }
     setEditingLogId(log.id);
     setEditLogName(log.name ?? "");
     setEditLogCalories(log.calories ? String(log.calories) : "");
     setEditLogType(log.meal_type);
+    lastSavedRef.current = {
+      name: log.name ?? "",
+      calories: log.calories ? String(log.calories) : "",
+      type: log.meal_type,
+    };
+    setEditStatus("idle");
     setError(null);
   };
 
   const handleLogCancel = () => {
+    if (saveTimerRef.current) {
+      clearTimeout(saveTimerRef.current);
+    }
     setEditingLogId(null);
     setEditLogName("");
     setEditLogCalories("");
     setEditLogType("breakfast");
+    setEditStatus("idle");
   };
 
-  const handleLogUpdate = async (logId: number) => {
-    if (!editLogName.trim() || !editLogCalories) {
-      setError("Nom et calories sont requis.");
+  const handleAutoSave = async (
+    logId: number,
+    nextName: string,
+    nextCalories: string,
+    nextType: MealLog["meal_type"]
+  ) => {
+    if (!nextName.trim() || nextCalories === "") {
       return;
     }
 
-    const caloriesValue = Number(editLogCalories);
+    const caloriesValue = Number(nextCalories);
     if (
       caloriesValue < minCalories ||
       caloriesValue > maxCalories ||
       Number.isNaN(caloriesValue)
     ) {
-      setError(`Calories entre ${minCalories} et ${maxCalories}.`);
+      setEditStatus("error");
       return;
     }
 
+    const lastSaved = lastSavedRef.current;
+    if (
+      lastSaved &&
+      lastSaved.name === nextName &&
+      lastSaved.calories === nextCalories &&
+      lastSaved.type === nextType
+    ) {
+      return;
+    }
+
+    setEditStatus("saving");
     const supabase = createSupabaseBrowserClient();
     const { error: updateError } = await supabase
       .from("meal_logs")
       .update({
-        meal_type: editLogType,
-        name: editLogName.trim(),
+        meal_type: nextType,
+        name: nextName.trim(),
         calories: caloriesValue,
       })
       .eq("id", logId);
 
     if (updateError) {
+      setEditStatus("error");
       setError(updateError.message);
       return;
     }
 
-    const { data } = await supabase
-      .from("meal_logs")
-      .select("id, meal_type, name, calories, created_at")
-      .eq("recorded_at", getISODate())
-      .order("created_at", { ascending: false });
-    setLogs((data ?? []) as MealLog[]);
-    handleLogCancel();
+    lastSavedRef.current = {
+      name: nextName,
+      calories: nextCalories,
+      type: nextType,
+    };
+    setLogs((prev) =>
+      prev.map((entry) =>
+        entry.id === logId
+          ? {
+              ...entry,
+              meal_type: nextType,
+              name: nextName.trim(),
+              calories: caloriesValue,
+            }
+          : entry
+      )
+    );
+    setError(null);
+    setEditStatus("saved");
+    setTimeout(() => setEditStatus("idle"), 1200);
+  };
+
+  const queueAutoSave = (
+    logId: number,
+    nextName: string,
+    nextCalories: string,
+    nextType: MealLog["meal_type"]
+  ) => {
+    if (!logId) {
+      return;
+    }
+    if (saveTimerRef.current) {
+      clearTimeout(saveTimerRef.current);
+    }
+    saveTimerRef.current = setTimeout(() => {
+      void handleAutoSave(logId, nextName, nextCalories, nextType);
+    }, 700);
   };
 
   const handleLogDelete = async (logId: number) => {
@@ -536,14 +613,34 @@ export default function FoodClient({
                   <div className="flex flex-wrap items-center gap-3">
                     <Input
                       value={editLogName}
-                      onChange={(event) => setEditLogName(event.target.value)}
+                      onChange={(event) => {
+                        const nextValue = event.target.value;
+                        setEditLogName(nextValue);
+                        if (editingLogId) {
+                          queueAutoSave(
+                            editingLogId,
+                            nextValue,
+                            editLogCalories,
+                            editLogType
+                          );
+                        }
+                      }}
                       className="flex-1"
                     />
                     <Select
                       value={editLogType}
-                      onChange={(event) =>
-                        setEditLogType(event.target.value as MealLog["meal_type"])
-                      }
+                      onChange={(event) => {
+                        const nextValue = event.target.value as MealLog["meal_type"];
+                        setEditLogType(nextValue);
+                        if (editingLogId) {
+                          queueAutoSave(
+                            editingLogId,
+                            editLogName,
+                            editLogCalories,
+                            nextValue
+                          );
+                        }
+                      }}
                       className="w-44"
                     >
                       <option value="breakfast">Petit dejeuner</option>
@@ -554,17 +651,32 @@ export default function FoodClient({
                     <Input
                       type="number"
                       value={editLogCalories}
-                      onChange={(event) =>
-                        setEditLogCalories(event.target.value)
-                      }
+                      onChange={(event) => {
+                        const nextValue = event.target.value;
+                        setEditLogCalories(nextValue);
+                        if (editingLogId) {
+                          queueAutoSave(
+                            editingLogId,
+                            editLogName,
+                            nextValue,
+                            editLogType
+                          );
+                        }
+                      }}
                       className="w-28"
                       min={minCalories}
                       max={maxCalories}
                     />
                     <div className="flex items-center gap-2">
-                      <Button size="sm" onClick={() => handleLogUpdate(log.id)}>
-                        Sauvegarder
-                      </Button>
+                      <span className="text-xs text-[var(--muted)]">
+                        {editStatus === "saving"
+                          ? "Enregistrement..."
+                          : editStatus === "saved"
+                            ? "Enregistre"
+                            : editStatus === "error"
+                              ? "Erreur"
+                              : "Auto-save actif"}
+                      </span>
                       <Button
                         size="sm"
                         variant="ghost"
