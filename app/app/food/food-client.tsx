@@ -81,6 +81,14 @@ export default function FoodClient({
     calories: string;
     type: MealLog["meal_type"];
   } | null>(null);
+  const [pendingDeletes, setPendingDeletes] = useState<
+    Array<{
+      id: number;
+      entry: MealLog;
+      timer: ReturnType<typeof setTimeout>;
+    }>
+  >([]);
+  const pendingDeletesRef = useRef(pendingDeletes);
 
   const totalCalories = useMemo(
     () =>
@@ -119,8 +127,13 @@ export default function FoodClient({
       if (saveTimerRef.current) {
         clearTimeout(saveTimerRef.current);
       }
+      pendingDeletesRef.current.forEach((item) => clearTimeout(item.timer));
     };
   }, []);
+
+  useEffect(() => {
+    pendingDeletesRef.current = pendingDeletes;
+  }, [pendingDeletes]);
 
   const resetTemplateForm = () => {
     setTemplateName("");
@@ -378,27 +391,42 @@ export default function FoodClient({
   };
 
   const handleLogDelete = async (logId: number) => {
-    if (!window.confirm("Supprimer ce repas ?")) {
+    const entry = logs.find((item) => item.id === logId);
+    if (!entry) {
       return;
     }
 
-    const supabase = createSupabaseBrowserClient();
-    const { error: deleteError } = await supabase
-      .from("meal_logs")
-      .delete()
-      .eq("id", logId);
-
-    if (deleteError) {
-      setError(deleteError.message);
-      return;
+    if (editingLogId === logId) {
+      handleLogCancel();
     }
 
-    const { data } = await supabase
-      .from("meal_logs")
-      .select("id, meal_type, name, calories, created_at")
-      .eq("recorded_at", getISODate())
-      .order("created_at", { ascending: false });
-    setLogs((data ?? []) as MealLog[]);
+    setLogs((prev) => prev.filter((item) => item.id !== logId));
+    const timer = setTimeout(async () => {
+      const supabase = createSupabaseBrowserClient();
+      const { error: deleteError } = await supabase
+        .from("meal_logs")
+        .delete()
+        .eq("id", logId);
+
+      if (deleteError) {
+        setError(deleteError.message);
+        setLogs((prev) => [entry, ...prev]);
+      }
+
+      setPendingDeletes((prev) => prev.filter((item) => item.id !== logId));
+    }, 5000);
+
+    setPendingDeletes((prev) => [{ id: logId, entry, timer }, ...prev]);
+  };
+
+  const handleUndoDelete = (logId: number) => {
+    const pending = pendingDeletes.find((item) => item.id === logId);
+    if (!pending) {
+      return;
+    }
+    clearTimeout(pending.timer);
+    setPendingDeletes((prev) => prev.filter((item) => item.id !== logId));
+    setLogs((prev) => [pending.entry, ...prev]);
   };
 
   return (
@@ -721,6 +749,31 @@ export default function FoodClient({
           </div>
         </Card>
       </div>
+
+      {pendingDeletes.length > 0 ? (
+        <div className="rounded-2xl border border-[var(--border)] bg-white/70 px-4 py-3 text-xs text-[var(--muted)]">
+          <div className="space-y-2">
+            {pendingDeletes.map((item) => (
+              <div
+                key={item.id}
+                className="flex flex-wrap items-center justify-between gap-3"
+              >
+                <span>
+                  Suppression planifiee: {item.entry.name ?? "Repas"} (
+                  {Number(item.entry.calories ?? 0).toFixed(0)} kcal)
+                </span>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => handleUndoDelete(item.id)}
+                >
+                  Annuler
+                </Button>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : null}
 
       {error ? <p className="text-sm text-red-600">{error}</p> : null}
       {message ? (

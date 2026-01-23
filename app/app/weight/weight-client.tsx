@@ -43,6 +43,14 @@ export default function WeightClient({
 
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastSavedRef = useRef<{ weight: string; date: string } | null>(null);
+  const [pendingDeletes, setPendingDeletes] = useState<
+    Array<{
+      id: number;
+      entry: WeightEntry;
+      timer: ReturnType<typeof setTimeout>;
+    }>
+  >([]);
+  const pendingDeletesRef = useRef(pendingDeletes);
 
   const delta7 = useMemo(() => calculateDelta7Days(entries), [entries]);
   const weightValue = Number(weight);
@@ -69,10 +77,15 @@ export default function WeightClient({
   };
 
   useEffect(() => {
+    pendingDeletesRef.current = pendingDeletes;
+  }, [pendingDeletes]);
+
+  useEffect(() => {
     return () => {
       if (saveTimerRef.current) {
         clearTimeout(saveTimerRef.current);
       }
+      pendingDeletesRef.current.forEach((item) => clearTimeout(item.timer));
     };
   }, []);
 
@@ -225,21 +238,57 @@ export default function WeightClient({
   };
 
   const handleDelete = async (entryId: number) => {
-    if (!window.confirm("Supprimer cette mesure ?")) {
-      return;
-    }
-    const supabase = createSupabaseBrowserClient();
-    const { error: deleteError } = await supabase
-      .from("weights")
-      .delete()
-      .eq("id", entryId);
-
-    if (deleteError) {
-      setError(deleteError.message);
+    const entry = entries.find((item) => item.id === entryId);
+    if (!entry) {
       return;
     }
 
-    await refreshEntries();
+    if (editingId === entryId) {
+      handleCancelEdit();
+    }
+
+    setEntries((prev) => prev.filter((item) => item.id !== entryId));
+    const timer = setTimeout(async () => {
+      const supabase = createSupabaseBrowserClient();
+      const { error: deleteError } = await supabase
+        .from("weights")
+        .delete()
+        .eq("id", entryId);
+
+      if (deleteError) {
+        setError(deleteError.message);
+        setEntries((prev) =>
+          [...prev, entry].sort(
+            (a, b) =>
+              new Date(b.recorded_at).getTime() -
+              new Date(a.recorded_at).getTime()
+          )
+        );
+      }
+
+      setPendingDeletes((prev) => prev.filter((item) => item.id !== entryId));
+    }, 5000);
+
+    setPendingDeletes((prev) => [
+      { id: entryId, entry, timer },
+      ...prev,
+    ]);
+  };
+
+  const handleUndoDelete = (entryId: number) => {
+    const pending = pendingDeletes.find((item) => item.id === entryId);
+    if (!pending) {
+      return;
+    }
+    clearTimeout(pending.timer);
+    setPendingDeletes((prev) => prev.filter((item) => item.id !== entryId));
+    setEntries((prev) =>
+      [...prev, pending.entry].sort(
+        (a, b) =>
+          new Date(b.recorded_at).getTime() -
+          new Date(a.recorded_at).getTime()
+      )
+    );
   };
 
   return (
@@ -310,6 +359,28 @@ export default function WeightClient({
         <h2 className="text-lg font-semibold text-[var(--foreground)]">
           Historique
         </h2>
+        {pendingDeletes.length > 0 ? (
+          <div className="space-y-2 rounded-2xl border border-[var(--border)] bg-white/70 px-4 py-3 text-xs text-[var(--muted)]">
+            {pendingDeletes.map((item) => (
+              <div
+                key={item.id}
+                className="flex flex-wrap items-center justify-between gap-3"
+              >
+                <span>
+                  Suppression planifiee: {formatShortDate(item.entry.recorded_at)}{" "}
+                  - {Number(item.entry.weight_kg).toFixed(1)} kg
+                </span>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => handleUndoDelete(item.id)}
+                >
+                  Annuler
+                </Button>
+              </div>
+            ))}
+          </div>
+        ) : null}
         <div className="space-y-3">
           {entries.length === 0 ? (
             <p className="text-sm text-[var(--muted)]">

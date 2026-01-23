@@ -17,6 +17,12 @@ type ActivityLog = {
   calories_burned: number | null;
 };
 
+type ActivityPreset = {
+  label: string;
+  duration: number;
+  calories: number;
+};
+
 type ActivityClientProps = {
   userId: string;
   initialLogs: ActivityLog[];
@@ -30,6 +36,12 @@ export default function ActivityClient({
   const maxDuration = 600;
   const minCalories = 10;
   const maxCalories = 5000;
+
+  const presets: ActivityPreset[] = [
+    { label: "Marche rapide", duration: 30, calories: 160 },
+    { label: "Yoga doux", duration: 20, calories: 80 },
+    { label: "Renfo express", duration: 25, calories: 190 },
+  ];
 
   const [type, setType] = useState("");
   const [duration, setDuration] = useState("");
@@ -51,6 +63,14 @@ export default function ActivityClient({
     duration: string;
     calories: string;
   } | null>(null);
+  const [pendingDeletes, setPendingDeletes] = useState<
+    Array<{
+      id: number;
+      entry: ActivityLog;
+      timer: ReturnType<typeof setTimeout>;
+    }>
+  >([]);
+  const pendingDeletesRef = useRef(pendingDeletes);
 
   const totalBurned = useMemo(
     () =>
@@ -60,6 +80,30 @@ export default function ActivityClient({
       ),
     [logs]
   );
+
+  const recentPresets = useMemo(() => {
+    const seen = new Set<string>();
+    return logs
+      .filter((entry) => {
+        if (seen.has(entry.activity_type)) {
+          return false;
+        }
+        seen.add(entry.activity_type);
+        return true;
+      })
+      .slice(0, 3)
+      .map((entry) => ({
+        label: entry.activity_type,
+        duration: entry.duration_min ?? minDuration,
+        calories: entry.calories_burned ?? minCalories,
+      }));
+  }, [logs]);
+
+  const applyPreset = (preset: ActivityPreset) => {
+    setType(preset.label);
+    setDuration(String(preset.duration));
+    setCalories(String(preset.calories));
+  };
 
   const durationValue = Number(duration);
   const caloriesValue = Number(calories);
@@ -82,10 +126,15 @@ export default function ActivityClient({
     calories !== "";
 
   useEffect(() => {
+    pendingDeletesRef.current = pendingDeletes;
+  }, [pendingDeletes]);
+
+  useEffect(() => {
     return () => {
       if (saveTimerRef.current) {
         clearTimeout(saveTimerRef.current);
       }
+      pendingDeletesRef.current.forEach((item) => clearTimeout(item.timer));
     };
   }, []);
 
@@ -257,27 +306,46 @@ export default function ActivityClient({
   };
 
   const handleDelete = async (entryId: number) => {
-    if (!window.confirm("Supprimer cette activite ?")) {
+    const entry = logs.find((item) => item.id === entryId);
+    if (!entry) {
       return;
     }
 
-    const supabase = createSupabaseBrowserClient();
-    const { error: deleteError } = await supabase
-      .from("activity_logs")
-      .delete()
-      .eq("id", entryId);
-
-    if (deleteError) {
-      setError(deleteError.message);
-      return;
+    if (editingId === entryId) {
+      handleCancelEdit();
     }
 
-    const { data } = await supabase
-      .from("activity_logs")
-      .select("id, activity_type, duration_min, calories_burned")
-      .eq("recorded_at", getISODate())
-      .order("created_at", { ascending: false });
-    setLogs((data ?? []) as ActivityLog[]);
+    setLogs((prev) => prev.filter((item) => item.id !== entryId));
+
+    const timer = setTimeout(async () => {
+      const supabase = createSupabaseBrowserClient();
+      const { error: deleteError } = await supabase
+        .from("activity_logs")
+        .delete()
+        .eq("id", entryId);
+
+      if (deleteError) {
+        setError(deleteError.message);
+        setLogs((prev) => [entry, ...prev]);
+      }
+
+      setPendingDeletes((prev) => prev.filter((item) => item.id !== entryId));
+    }, 5000);
+
+    setPendingDeletes((prev) => [
+      { id: entryId, entry, timer },
+      ...prev,
+    ]);
+  };
+
+  const handleUndoDelete = (entryId: number) => {
+    const pending = pendingDeletes.find((item) => item.id === entryId);
+    if (!pending) {
+      return;
+    }
+    clearTimeout(pending.timer);
+    setPendingDeletes((prev) => prev.filter((item) => item.id !== entryId));
+    setLogs((prev) => [pending.entry, ...prev]);
   };
 
   return (
@@ -292,6 +360,44 @@ export default function ActivityClient({
           <h2 className="text-lg font-semibold text-[var(--foreground)]">
             Nouvelle activite
           </h2>
+          <div className="space-y-2">
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--muted)]">
+              Presets rapides
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {presets.map((preset) => (
+                <Button
+                  key={preset.label}
+                  type="button"
+                  size="sm"
+                  variant="soft"
+                  onClick={() => applyPreset(preset)}
+                >
+                  {preset.label}
+                </Button>
+              ))}
+            </div>
+          </div>
+          {recentPresets.length > 0 ? (
+            <div className="space-y-2">
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--muted)]">
+                Recent
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {recentPresets.map((preset) => (
+                  <Button
+                    key={preset.label}
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() => applyPreset(preset)}
+                  >
+                    {preset.label}
+                  </Button>
+                ))}
+              </div>
+            </div>
+          ) : null}
           <form className="grid gap-4 sm:grid-cols-2" onSubmit={handleSubmit}>
             <div className="space-y-2 sm:col-span-2">
               <Label htmlFor="activity-type">Type</Label>
@@ -358,6 +464,28 @@ export default function ActivityClient({
         <h2 className="text-lg font-semibold text-[var(--foreground)]">
           Journal du jour
         </h2>
+        {pendingDeletes.length > 0 ? (
+          <div className="space-y-2 rounded-2xl border border-[var(--border)] bg-white/70 px-4 py-3 text-xs text-[var(--muted)]">
+            {pendingDeletes.map((item) => (
+              <div
+                key={item.id}
+                className="flex flex-wrap items-center justify-between gap-3"
+              >
+                <span>
+                  Suppression planifiee: {item.entry.activity_type} (
+                  {item.entry.duration_min ?? "--"} min)
+                </span>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => handleUndoDelete(item.id)}
+                >
+                  Annuler
+                </Button>
+              </div>
+            ))}
+          </div>
+        ) : null}
         <div className="space-y-3">
           {logs.length === 0 ? (
             <p className="text-sm text-[var(--muted)]">

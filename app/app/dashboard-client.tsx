@@ -85,6 +85,8 @@ export default function DashboardClient({
   const netSeries = lastSevenDays.map(
     (date) => (mealByDate[date] ?? 0) - (activityByDate[date] ?? 0)
   );
+  const weeklyNet = netSeries.reduce((sum, value) => sum + value, 0);
+  const averageNet = weeklyNet / 7;
 
   const weightByDate = weights.reduce<Record<string, number>>((acc, item) => {
     const value = Number(item.weight_kg);
@@ -102,6 +104,15 @@ export default function DashboardClient({
     }
     return lastWeight ?? 0;
   });
+
+  const weekWeights = weights
+    .filter((entry) => lastSevenDays.includes(entry.recorded_at))
+    .map((entry) => Number(entry.weight_kg))
+    .filter((value) => Number.isFinite(value));
+  const averageWeight =
+    weekWeights.length > 0
+      ? weekWeights.reduce((sum, value) => sum + value, 0) / weekWeights.length
+      : null;
 
   const hasWeightSeries = weightSeries.some((value) => value > 0);
   const hasNetSeries = netSeries.some((value) => value !== 0);
@@ -189,6 +200,34 @@ export default function DashboardClient({
           </p>
         </Card>
       </div>
+
+      <Card className="space-y-3">
+        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--muted)]">
+          Resume hebdo
+        </p>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div className="rounded-2xl border border-[var(--border)] bg-white/70 px-4 py-3">
+            <p className="text-xs text-[var(--muted)]">Calories nettes</p>
+            <p className="text-lg font-semibold text-[var(--foreground)]">
+              {weeklyNet >= 0 ? "+" : ""}
+              {weeklyNet.toFixed(0)} kcal
+            </p>
+            <p className="text-xs text-[var(--muted)]">
+              Moyenne: {averageNet >= 0 ? "+" : ""}
+              {averageNet.toFixed(0)} kcal / jour
+            </p>
+          </div>
+          <div className="rounded-2xl border border-[var(--border)] bg-white/70 px-4 py-3">
+            <p className="text-xs text-[var(--muted)]">Poids moyen</p>
+            <p className="text-lg font-semibold text-[var(--foreground)]">
+              {averageWeight ? `${averageWeight.toFixed(1)} kg` : "--"}
+            </p>
+            <p className="text-xs text-[var(--muted)]">
+              Basé sur les 7 derniers jours.
+            </p>
+          </div>
+        </div>
+      </Card>
 
       <div className="grid gap-4 lg:grid-cols-2">
         <Card className="space-y-3">
