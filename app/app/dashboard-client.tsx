@@ -1,15 +1,19 @@
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { Sparkline } from "@/components/ui/sparkline";
+import { getISODate } from "@/lib/date";
 import { calculateDelta7Days } from "@/lib/metrics";
 
 type MealLog = {
   calories: number | null;
   meal_type: "breakfast" | "lunch" | "dinner" | "snack";
+  recorded_at: string;
 };
 
 type ActivityLog = {
   calories_burned: number | null;
+  recorded_at: string;
 };
 
 type WeightEntry = {
@@ -32,16 +36,22 @@ export default function DashboardClient({
   weights,
   error,
 }: DashboardClientProps) {
-  const consumed = meals.reduce(
+  const today = getISODate();
+  const todayMeals = meals.filter((meal) => meal.recorded_at === today);
+  const todayActivities = activities.filter(
+    (activity) => activity.recorded_at === today
+  );
+
+  const consumed = todayMeals.reduce(
     (total, item) => total + (item.calories ? Number(item.calories) : 0),
     0
   );
-  const burned = activities.reduce(
+  const burned = todayActivities.reduce(
     (total, item) =>
       total + (item.calories_burned ? Number(item.calories_burned) : 0),
     0
   );
-  const mealTotals = meals.reduce<Record<string, number>>((acc, item) => {
+  const mealTotals = todayMeals.reduce<Record<string, number>>((acc, item) => {
     const current = acc[item.meal_type] ?? 0;
     acc[item.meal_type] = current + (item.calories ?? 0);
     return acc;
@@ -50,6 +60,51 @@ export default function DashboardClient({
   const remaining = target - consumed + burned;
   const latestWeight = weights[0] ? Number(weights[0].weight_kg) : null;
   const delta7 = calculateDelta7Days(weights);
+
+  const lastSevenDays = Array.from({ length: 7 }, (_, index) => {
+    const date = new Date();
+    date.setDate(date.getDate() - (6 - index));
+    return getISODate(date);
+  });
+
+  const mealByDate = meals.reduce<Record<string, number>>((acc, item) => {
+    acc[item.recorded_at] =
+      (acc[item.recorded_at] ?? 0) + (item.calories ?? 0);
+    return acc;
+  }, {});
+
+  const activityByDate = activities.reduce<Record<string, number>>(
+    (acc, item) => {
+      acc[item.recorded_at] =
+        (acc[item.recorded_at] ?? 0) + (item.calories_burned ?? 0);
+      return acc;
+    },
+    {}
+  );
+
+  const netSeries = lastSevenDays.map(
+    (date) => (mealByDate[date] ?? 0) - (activityByDate[date] ?? 0)
+  );
+
+  const weightByDate = weights.reduce<Record<string, number>>((acc, item) => {
+    const value = Number(item.weight_kg);
+    if (!Number.isNaN(value)) {
+      acc[item.recorded_at] = value;
+    }
+    return acc;
+  }, {});
+
+  let lastWeight: number | null = null;
+  const weightSeries = lastSevenDays.map((date) => {
+    const value = weightByDate[date];
+    if (value !== undefined) {
+      lastWeight = value;
+    }
+    return lastWeight ?? 0;
+  });
+
+  const hasWeightSeries = weightSeries.some((value) => value > 0);
+  const hasNetSeries = netSeries.some((value) => value !== 0);
 
   return (
     <div className="space-y-6">
@@ -132,6 +187,33 @@ export default function DashboardClient({
                   1
                 )} kg sur 7 jours.`}
           </p>
+        </Card>
+      </div>
+
+      <div className="grid gap-4 lg:grid-cols-2">
+        <Card className="space-y-3">
+          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--muted)]">
+            Poids 7 jours
+          </p>
+          {hasWeightSeries ? (
+            <Sparkline values={weightSeries} />
+          ) : (
+            <p className="text-sm text-[var(--muted)]">
+              Ajoute des mesures pour voir la courbe.
+            </p>
+          )}
+        </Card>
+        <Card className="space-y-3" variant="outline">
+          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--muted)]">
+            Calories nettes 7 jours
+          </p>
+          {hasNetSeries ? (
+            <Sparkline values={netSeries} />
+          ) : (
+            <p className="text-sm text-[var(--muted)]">
+              Ajoute des repas pour alimenter le suivi.
+            </p>
+          )}
         </Card>
       </div>
     </div>

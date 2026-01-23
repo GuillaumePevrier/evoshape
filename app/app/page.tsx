@@ -5,6 +5,9 @@ import { createSupabaseServerClient } from "@/src/lib/supabase/server";
 export default async function DashboardPage() {
   const supabase = await createSupabaseServerClient();
   const today = getISODate();
+  const startDate = new Date();
+  startDate.setDate(startDate.getDate() - 6);
+  const start = getISODate(startDate);
 
   const [
     { data: profile, error: profileError },
@@ -15,17 +18,19 @@ export default async function DashboardPage() {
     supabase.from("profiles").select("target_calories").maybeSingle(),
     supabase
       .from("meal_logs")
-      .select("calories, meal_type")
-      .eq("recorded_at", today),
+      .select("calories, meal_type, recorded_at")
+      .gte("recorded_at", start)
+      .lte("recorded_at", today),
     supabase
       .from("activity_logs")
-      .select("calories_burned")
-      .eq("recorded_at", today),
+      .select("calories_burned, recorded_at")
+      .gte("recorded_at", start)
+      .lte("recorded_at", today),
     supabase
       .from("weights")
       .select("weight_kg, recorded_at")
       .order("recorded_at", { ascending: false })
-      .limit(14),
+      .limit(30),
   ]);
 
   const errorMessage =
