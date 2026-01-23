@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -8,8 +8,9 @@ import {
   getSubscriptionId,
   hasOneSignalAppId,
   initOneSignal,
-  optOutNotifications,
-  requestNotifications,
+  isPushEnabled,
+  subscribeToPush,
+  unsubscribeFromPush,
 } from "@/src/lib/onesignal";
 
 type Status = "unknown" | "subscribed" | "unsubscribed";
@@ -21,6 +22,23 @@ export default function SettingsClient() {
   const [message, setMessage] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
+  const refreshStatus = async () => {
+    if (!hasOneSignalAppId) {
+      setStatus("unknown");
+      return;
+    }
+    const enabled = await isPushEnabled();
+    setStatus(enabled ? "subscribed" : "unsubscribed");
+  };
+
+  useEffect(() => {
+    if (!hasOneSignalAppId) {
+      return;
+    }
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    refreshStatus();
+  }, []);
+
   const handleEnable = async () => {
     setLoading(true);
     setMessage(null);
@@ -31,7 +49,7 @@ export default function SettingsClient() {
       return;
     }
 
-    const requestResult = await requestNotifications();
+    const requestResult = await subscribeToPush();
     if (!requestResult.ok) {
       setMessage("Impossible d'activer les notifications.");
       setLoading(false);
@@ -63,7 +81,7 @@ export default function SettingsClient() {
       return;
     }
 
-    setStatus("subscribed");
+    await refreshStatus();
     setMessage("Notifications activees.");
     setLoading(false);
   };
@@ -71,13 +89,13 @@ export default function SettingsClient() {
   const handleDisable = async () => {
     setLoading(true);
     setMessage(null);
-    const result = await optOutNotifications();
+    const result = await unsubscribeFromPush();
     if (!result.ok) {
       setMessage("Impossible de desactiver pour le moment.");
       setLoading(false);
       return;
     }
-    setStatus("unsubscribed");
+    await refreshStatus();
     setMessage("Notifications desactivees.");
     setLoading(false);
   };
@@ -119,20 +137,23 @@ export default function SettingsClient() {
         ) : null}
 
         <div className="flex flex-wrap gap-3">
-          <Button
-            variant="primary"
-            onClick={handleEnable}
-            disabled={!hasOneSignalAppId || loading || status === "subscribed"}
-          >
-            {loading && status !== "subscribed" ? "Activation..." : "Activer"}
-          </Button>
-          <Button
-            variant="outline"
-            onClick={handleDisable}
-            disabled={!hasOneSignalAppId || loading || status !== "subscribed"}
-          >
-            Desactiver
-          </Button>
+          {status === "subscribed" ? (
+            <Button
+              variant="outline"
+              onClick={handleDisable}
+              disabled={!hasOneSignalAppId || loading}
+            >
+              {loading ? "Desactivation..." : "Desactiver"}
+            </Button>
+          ) : (
+            <Button
+              variant="primary"
+              onClick={handleEnable}
+              disabled={!hasOneSignalAppId || loading}
+            >
+              {loading ? "Activation..." : "Activer"}
+            </Button>
+          )}
         </div>
 
         {message ? (

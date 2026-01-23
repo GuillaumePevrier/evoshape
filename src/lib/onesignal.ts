@@ -26,11 +26,7 @@ const loadScript = () => {
 };
 
 type OneSignalSDK = {
-  init?: (options: {
-    appId: string;
-    serviceWorkerPath: string;
-    serviceWorkerUpdaterPath: string;
-  }) => Promise<void> | void;
+  init?: (options: { appId: string }) => Promise<void> | void;
   Notifications?: {
     requestPermission?: () => Promise<void>;
     setSubscription?: (value: boolean) => Promise<void>;
@@ -38,6 +34,7 @@ type OneSignalSDK = {
   User?: {
     PushSubscription?: {
       id?: string;
+      optedIn?: boolean;
       optIn?: () => Promise<void>;
       optOut?: () => Promise<void>;
     };
@@ -49,7 +46,9 @@ const getOneSignal = (): OneSignalSDK | null => {
   if (typeof window === "undefined") {
     return null;
   }
-  return (window as typeof window & { OneSignal?: OneSignalSDK }).OneSignal ?? null;
+  return (
+    (window as typeof window & { OneSignal?: OneSignalSDK }).OneSignal ?? null
+  );
 };
 
 export const hasOneSignalAppId = Boolean(
@@ -74,11 +73,7 @@ export const initOneSignal = async (): Promise<InitResult> => {
         if (!OneSignal?.init) {
           return { ok: false, reason: "sdk-unavailable" };
         }
-        await OneSignal.init({
-          appId,
-          serviceWorkerPath: "/OneSignalSDKWorker.js",
-          serviceWorkerUpdaterPath: "/OneSignalSDKWorker.js",
-        });
+        await OneSignal.init({ appId });
         initialized = true;
         return { ok: true };
       } catch {
@@ -90,7 +85,7 @@ export const initOneSignal = async (): Promise<InitResult> => {
   return initPromise;
 };
 
-export const requestNotifications = async () => {
+export const subscribeToPush = async () => {
   const initResult = await initOneSignal();
   if (!initResult.ok) {
     return initResult;
@@ -112,7 +107,7 @@ export const requestNotifications = async () => {
   return { ok: true };
 };
 
-export const optOutNotifications = async () => {
+export const unsubscribeFromPush = async () => {
   const initResult = await initOneSignal();
   if (!initResult.ok) {
     return initResult;
@@ -152,4 +147,26 @@ export const getSubscriptionId = async () => {
   }
 
   return null;
+};
+
+export const isPushEnabled = async () => {
+  const initResult = await initOneSignal();
+  if (!initResult.ok) {
+    return false;
+  }
+
+  const OneSignal = getOneSignal();
+  if (!OneSignal) {
+    return false;
+  }
+
+  if (typeof OneSignal.User?.PushSubscription?.optedIn === "boolean") {
+    return OneSignal.User.PushSubscription.optedIn;
+  }
+
+  if (typeof OneSignal.User?.PushSubscription?.id === "string") {
+    return OneSignal.User.PushSubscription.id.length > 0;
+  }
+
+  return false;
 };

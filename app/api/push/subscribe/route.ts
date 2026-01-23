@@ -22,11 +22,11 @@ export async function POST(request: Request) {
   }
 
   const subscriptionId = String(payload.subscriptionId ?? "").trim();
-  const platform = payload.platform ? String(payload.platform) : null;
+  const platform = payload.platform ? String(payload.platform).trim() : "";
 
-  if (!subscriptionId) {
+  if (!subscriptionId || !platform) {
     return NextResponse.json(
-      { error: "subscriptionId is required" },
+      { error: "subscriptionId and platform are required" },
       { status: 400 }
     );
   }
