@@ -46,6 +46,9 @@ export default function FoodClient({
   initialTemplates,
   initialLogs,
 }: FoodClientProps) {
+  const minCalories = 50;
+  const maxCalories = 5000;
+
   const [templates, setTemplates] = useState<Template[]>(initialTemplates);
   const [logs, setLogs] = useState<MealLog[]>(initialLogs);
   const [message, setMessage] = useState<string | null>(null);
@@ -63,6 +66,11 @@ export default function FoodClient({
   const [selectedTemplateId, setSelectedTemplateId] = useState("");
   const [mealName, setMealName] = useState("");
   const [mealCalories, setMealCalories] = useState("");
+  const [editingLogId, setEditingLogId] = useState<number | null>(null);
+  const [editLogName, setEditLogName] = useState("");
+  const [editLogCalories, setEditLogCalories] = useState("");
+  const [editLogType, setEditLogType] =
+    useState<MealLog["meal_type"]>("breakfast");
 
   const totalCalories = useMemo(
     () =>
@@ -72,6 +80,29 @@ export default function FoodClient({
       ),
     [logs]
   );
+
+  const templateCaloriesValue = Number(templateCalories);
+  const templateCaloriesError =
+    templateCalories &&
+    (templateCaloriesValue < minCalories ||
+      templateCaloriesValue > maxCalories)
+      ? `Calories entre ${minCalories} et ${maxCalories}.`
+      : null;
+  const canSubmitTemplate =
+    templateName.trim().length > 0 &&
+    !templateCaloriesError &&
+    templateCalories !== "";
+
+  const mealCaloriesValue = Number(mealCalories);
+  const mealCaloriesError =
+    mealCalories &&
+    (mealCaloriesValue < minCalories || mealCaloriesValue > maxCalories)
+      ? `Calories entre ${minCalories} et ${maxCalories}.`
+      : null;
+  const canSubmitMeal =
+    mealName.trim().length > 0 &&
+    !mealCaloriesError &&
+    mealCalories !== "";
 
   const resetTemplateForm = () => {
     setTemplateName("");
@@ -94,6 +125,11 @@ export default function FoodClient({
 
     if (!templateName.trim() || !templateCalories) {
       setError("Nom et calories sont requis.");
+      return;
+    }
+
+    if (templateCaloriesError) {
+      setError(templateCaloriesError);
       return;
     }
 
@@ -177,6 +213,11 @@ export default function FoodClient({
       return;
     }
 
+    if (mealCaloriesError) {
+      setError(mealCaloriesError);
+      return;
+    }
+
     const supabase = createSupabaseBrowserClient();
     const { error: logError } = await supabase.from("meal_logs").insert({
       user_id: userId,
@@ -195,6 +236,85 @@ export default function FoodClient({
     setMealName("");
     setMealCalories("");
     setSelectedTemplateId("");
+
+    const { data } = await supabase
+      .from("meal_logs")
+      .select("id, meal_type, name, calories, created_at")
+      .eq("recorded_at", getISODate())
+      .order("created_at", { ascending: false });
+    setLogs((data ?? []) as MealLog[]);
+  };
+
+  const handleLogEdit = (log: MealLog) => {
+    setEditingLogId(log.id);
+    setEditLogName(log.name ?? "");
+    setEditLogCalories(log.calories ? String(log.calories) : "");
+    setEditLogType(log.meal_type);
+    setError(null);
+  };
+
+  const handleLogCancel = () => {
+    setEditingLogId(null);
+    setEditLogName("");
+    setEditLogCalories("");
+    setEditLogType("breakfast");
+  };
+
+  const handleLogUpdate = async (logId: number) => {
+    if (!editLogName.trim() || !editLogCalories) {
+      setError("Nom et calories sont requis.");
+      return;
+    }
+
+    const caloriesValue = Number(editLogCalories);
+    if (
+      caloriesValue < minCalories ||
+      caloriesValue > maxCalories ||
+      Number.isNaN(caloriesValue)
+    ) {
+      setError(`Calories entre ${minCalories} et ${maxCalories}.`);
+      return;
+    }
+
+    const supabase = createSupabaseBrowserClient();
+    const { error: updateError } = await supabase
+      .from("meal_logs")
+      .update({
+        meal_type: editLogType,
+        name: editLogName.trim(),
+        calories: caloriesValue,
+      })
+      .eq("id", logId);
+
+    if (updateError) {
+      setError(updateError.message);
+      return;
+    }
+
+    const { data } = await supabase
+      .from("meal_logs")
+      .select("id, meal_type, name, calories, created_at")
+      .eq("recorded_at", getISODate())
+      .order("created_at", { ascending: false });
+    setLogs((data ?? []) as MealLog[]);
+    handleLogCancel();
+  };
+
+  const handleLogDelete = async (logId: number) => {
+    if (!window.confirm("Supprimer ce repas ?")) {
+      return;
+    }
+
+    const supabase = createSupabaseBrowserClient();
+    const { error: deleteError } = await supabase
+      .from("meal_logs")
+      .delete()
+      .eq("id", logId);
+
+    if (deleteError) {
+      setError(deleteError.message);
+      return;
+    }
 
     const { data } = await supabase
       .from("meal_logs")
@@ -278,7 +398,12 @@ export default function FoodClient({
                 placeholder="480"
                 value={templateCalories}
                 onChange={(event) => setTemplateCalories(event.target.value)}
+                min={minCalories}
+                max={maxCalories}
               />
+              {templateCaloriesError ? (
+                <p className="text-xs text-red-600">{templateCaloriesError}</p>
+              ) : null}
             </div>
             <div className="space-y-2">
               <Label htmlFor="template-protein">Proteines (g)</Label>
@@ -311,7 +436,7 @@ export default function FoodClient({
               />
             </div>
             <div className="sm:col-span-2">
-              <Button type="submit">
+              <Button type="submit" disabled={!canSubmitTemplate}>
                 {editingTemplate ? "Mettre a jour" : "Ajouter le template"}
               </Button>
             </div>
@@ -385,9 +510,16 @@ export default function FoodClient({
                 placeholder="520"
                 value={mealCalories}
                 onChange={(event) => setMealCalories(event.target.value)}
+                min={minCalories}
+                max={maxCalories}
               />
+              {mealCaloriesError ? (
+                <p className="text-xs text-red-600">{mealCaloriesError}</p>
+              ) : null}
             </div>
-            <Button type="submit">Ajouter au journal</Button>
+            <Button type="submit" disabled={!canSubmitMeal}>
+              Ajouter au journal
+            </Button>
           </form>
           <div className="space-y-3">
             {logs.length === 0 ? (
@@ -395,23 +527,85 @@ export default function FoodClient({
                 Aucun repas ajoute aujourd&apos;hui.
               </p>
             ) : (
-              logs.map((log) => (
-                <div
-                  key={log.id}
-                  className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-[var(--border)] bg-white/70 px-4 py-3 text-sm"
-                >
-                  <span className="font-semibold text-[var(--foreground)]">
-                    {log.name ?? "Repas"}
-                  </span>
-                  <span className="text-[var(--muted)]">
-                    {mealLabels[log.meal_type]}
-                  </span>
-                  <span className="text-[var(--foreground)]">
-                    {Number(log.calories).toFixed(0)} kcal
-                  </span>
-                </div>
-              ))
-            )}
+            logs.map((log) => (
+              <div
+                key={log.id}
+                className="rounded-2xl border border-[var(--border)] bg-white/70 px-4 py-3 text-sm"
+              >
+                {editingLogId === log.id ? (
+                  <div className="flex flex-wrap items-center gap-3">
+                    <Input
+                      value={editLogName}
+                      onChange={(event) => setEditLogName(event.target.value)}
+                      className="flex-1"
+                    />
+                    <Select
+                      value={editLogType}
+                      onChange={(event) =>
+                        setEditLogType(event.target.value as MealLog["meal_type"])
+                      }
+                      className="w-44"
+                    >
+                      <option value="breakfast">Petit dejeuner</option>
+                      <option value="lunch">Dejeuner</option>
+                      <option value="dinner">Diner</option>
+                      <option value="snack">Snack</option>
+                    </Select>
+                    <Input
+                      type="number"
+                      value={editLogCalories}
+                      onChange={(event) =>
+                        setEditLogCalories(event.target.value)
+                      }
+                      className="w-28"
+                      min={minCalories}
+                      max={maxCalories}
+                    />
+                    <div className="flex items-center gap-2">
+                      <Button size="sm" onClick={() => handleLogUpdate(log.id)}>
+                        Sauvegarder
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={handleLogCancel}
+                      >
+                        Annuler
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <span className="font-semibold text-[var(--foreground)]">
+                      {log.name ?? "Repas"}
+                    </span>
+                    <span className="text-[var(--muted)]">
+                      {mealLabels[log.meal_type]}
+                    </span>
+                    <span className="text-[var(--foreground)]">
+                      {Number(log.calories).toFixed(0)} kcal
+                    </span>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => handleLogEdit(log)}
+                      >
+                        Modifier
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleLogDelete(log.id)}
+                      >
+                        Supprimer
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            ))
+          )}
           </div>
         </Card>
       </div>

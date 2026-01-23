@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select } from "@/components/ui/select";
 import { createSupabaseBrowserClient } from "@/src/lib/supabase/client";
 
 type ProfileForm = {
@@ -32,6 +33,11 @@ export default function ProfileClient({
   userId,
   initialProfile,
 }: ProfileClientProps) {
+  const minHeight = 120;
+  const maxHeight = 230;
+  const minCalories = 800;
+  const maxCalories = 5000;
+
   const [form, setForm] = useState<ProfileForm>(() => ({
     displayName: initialProfile?.display_name ?? "",
     sex: initialProfile?.sex ?? "",
@@ -46,6 +52,20 @@ export default function ProfileClient({
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  const heightValue = Number(form.heightCm);
+  const caloriesValue = Number(form.targetCalories);
+  const heightError =
+    form.heightCm &&
+    (heightValue < minHeight || heightValue > maxHeight)
+      ? `Taille entre ${minHeight} et ${maxHeight} cm.`
+      : null;
+  const caloriesError =
+    form.targetCalories &&
+    (caloriesValue < minCalories || caloriesValue > maxCalories)
+      ? `Calories entre ${minCalories} et ${maxCalories}.`
+      : null;
+  const canSubmit = !saving && !heightError && !caloriesError;
 
   const updateField = (key: keyof ProfileForm, value: string) => {
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -107,13 +127,17 @@ export default function ProfileClient({
           </div>
           <div className="space-y-2">
             <Label htmlFor="sex">Sexe</Label>
-            <Input
+            <Select
               id="sex"
-              placeholder="female / male / other"
               value={form.sex}
               onChange={(event) => updateField("sex", event.target.value)}
               disabled={saving}
-            />
+            >
+              <option value="">Non specifie</option>
+              <option value="female">Female</option>
+              <option value="male">Male</option>
+              <option value="other">Other</option>
+            </Select>
           </div>
           <div className="space-y-2">
             <Label htmlFor="birth-year">Annee de naissance</Label>
@@ -136,6 +160,9 @@ export default function ProfileClient({
               onChange={(event) => updateField("heightCm", event.target.value)}
               disabled={saving}
             />
+            {heightError ? (
+              <p className="text-xs text-red-600">{heightError}</p>
+            ) : null}
           </div>
           <div className="space-y-2">
             <Label htmlFor="target">Objectif calories</Label>
@@ -149,9 +176,12 @@ export default function ProfileClient({
               }
               disabled={saving}
             />
+            {caloriesError ? (
+              <p className="text-xs text-red-600">{caloriesError}</p>
+            ) : null}
           </div>
           <div className="flex items-end">
-            <Button type="submit" disabled={saving}>
+            <Button type="submit" disabled={!canSubmit}>
               {saving ? "Enregistrement..." : "Enregistrer"}
             </Button>
           </div>

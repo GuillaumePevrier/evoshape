@@ -26,13 +26,41 @@ export default function WeightClient({
   userId,
   initialEntries,
 }: WeightClientProps) {
+  const minWeight = 30;
+  const maxWeight = 300;
+
   const [weight, setWeight] = useState("");
   const [recordedAt, setRecordedAt] = useState(getISODate());
   const [entries, setEntries] = useState<WeightEntry[]>(initialEntries);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [editWeight, setEditWeight] = useState("");
+  const [editDate, setEditDate] = useState("");
 
   const delta7 = useMemo(() => calculateDelta7Days(entries), [entries]);
+  const weightValue = Number(weight);
+  const weightError =
+    weight &&
+    (weightValue < minWeight || weightValue > maxWeight)
+      ? `Poids entre ${minWeight} et ${maxWeight} kg.`
+      : null;
+  const canSubmit = !saving && !weightError && Boolean(recordedAt) && weight !== "";
+
+  const refreshEntries = async () => {
+    const supabase = createSupabaseBrowserClient();
+    const { data, error: loadError } = await supabase
+      .from("weights")
+      .select("id, recorded_at, weight_kg")
+      .order("recorded_at", { ascending: false });
+
+    if (loadError) {
+      setError(loadError.message);
+      return;
+    }
+
+    setEntries((data ?? []) as WeightEntry[]);
+  };
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -40,8 +68,12 @@ export default function WeightClient({
     setError(null);
 
     const numericWeight = Number(weight);
-    if (!numericWeight || numericWeight <= 0) {
-      setError("Renseigne un poids valide.");
+    if (
+      !numericWeight ||
+      numericWeight < minWeight ||
+      numericWeight > maxWeight
+    ) {
+      setError(`Poids entre ${minWeight} et ${maxWeight} kg.`);
       setSaving(false);
       return;
     }
@@ -68,14 +100,74 @@ export default function WeightClient({
       setError(upsertError.message);
     } else {
       setWeight("");
-      const { data } = await supabase
-        .from("weights")
-        .select("id, recorded_at, weight_kg")
-        .order("recorded_at", { ascending: false });
-      setEntries((data ?? []) as WeightEntry[]);
+      await refreshEntries();
     }
 
     setSaving(false);
+  };
+
+  const handleEdit = (entry: WeightEntry) => {
+    setEditingId(entry.id);
+    setEditWeight(String(entry.weight_kg));
+    setEditDate(entry.recorded_at);
+    setError(null);
+  };
+
+  const handleCancelEdit = () => {
+    setEditingId(null);
+    setEditWeight("");
+    setEditDate("");
+  };
+
+  const handleUpdate = async (entryId: number) => {
+    const numericWeight = Number(editWeight);
+    if (
+      !numericWeight ||
+      numericWeight < minWeight ||
+      numericWeight > maxWeight
+    ) {
+      setError(`Poids entre ${minWeight} et ${maxWeight} kg.`);
+      return;
+    }
+    if (!editDate) {
+      setError("Date requise.");
+      return;
+    }
+
+    const supabase = createSupabaseBrowserClient();
+    const { error: updateError } = await supabase
+      .from("weights")
+      .update({
+        weight_kg: numericWeight,
+        recorded_at: editDate,
+      })
+      .eq("id", entryId);
+
+    if (updateError) {
+      setError(updateError.message);
+      return;
+    }
+
+    await refreshEntries();
+    handleCancelEdit();
+  };
+
+  const handleDelete = async (entryId: number) => {
+    if (!window.confirm("Supprimer cette mesure ?")) {
+      return;
+    }
+    const supabase = createSupabaseBrowserClient();
+    const { error: deleteError } = await supabase
+      .from("weights")
+      .delete()
+      .eq("id", entryId);
+
+    if (deleteError) {
+      setError(deleteError.message);
+      return;
+    }
+
+    await refreshEntries();
   };
 
   return (
@@ -100,7 +192,12 @@ export default function WeightClient({
                 value={weight}
                 onChange={(event) => setWeight(event.target.value)}
                 disabled={saving}
+                min={minWeight}
+                max={maxWeight}
               />
+              {weightError ? (
+                <p className="text-xs text-red-600">{weightError}</p>
+              ) : null}
             </div>
             <div className="space-y-2">
               <Label htmlFor="date">Date</Label>
@@ -113,7 +210,7 @@ export default function WeightClient({
               />
             </div>
             <div className="sm:col-span-2">
-              <Button type="submit" disabled={saving}>
+              <Button type="submit" disabled={!canSubmit}>
                 {saving ? "Ajout..." : "Ajouter"}
               </Button>
             </div>
@@ -150,14 +247,66 @@ export default function WeightClient({
             entries.map((item) => (
               <div
                 key={item.id}
-                className="flex items-center justify-between rounded-2xl border border-[var(--border)] bg-white/70 px-4 py-3 text-sm"
+                className="rounded-2xl border border-[var(--border)] bg-white/70 px-4 py-3 text-sm"
               >
-                <span className="text-[var(--muted)]">
-                  {formatShortDate(item.recorded_at)}
-                </span>
-                <span className="font-semibold text-[var(--foreground)]">
-                  {Number(item.weight_kg).toFixed(1)} kg
-                </span>
+                {editingId === item.id ? (
+                  <div className="flex flex-wrap items-center gap-3">
+                    <Input
+                      type="number"
+                      value={editWeight}
+                      onChange={(event) => setEditWeight(event.target.value)}
+                      className="w-32"
+                      min={minWeight}
+                      max={maxWeight}
+                    />
+                    <Input
+                      type="date"
+                      value={editDate}
+                      onChange={(event) => setEditDate(event.target.value)}
+                      className="w-44"
+                    />
+                    <div className="flex items-center gap-2">
+                      <Button
+                        size="sm"
+                        onClick={() => handleUpdate(item.id)}
+                      >
+                        Sauvegarder
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={handleCancelEdit}
+                      >
+                        Annuler
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <span className="text-[var(--muted)]">
+                      {formatShortDate(item.recorded_at)}
+                    </span>
+                    <span className="font-semibold text-[var(--foreground)]">
+                      {Number(item.weight_kg).toFixed(1)} kg
+                    </span>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => handleEdit(item)}
+                      >
+                        Modifier
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleDelete(item.id)}
+                      >
+                        Supprimer
+                      </Button>
+                    </div>
+                  </div>
+                )}
               </div>
             ))
           )}

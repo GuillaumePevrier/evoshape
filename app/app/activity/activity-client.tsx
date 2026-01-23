@@ -26,12 +26,21 @@ export default function ActivityClient({
   userId,
   initialLogs,
 }: ActivityClientProps) {
+  const minDuration = 5;
+  const maxDuration = 600;
+  const minCalories = 10;
+  const maxCalories = 5000;
+
   const [type, setType] = useState("");
   const [duration, setDuration] = useState("");
   const [calories, setCalories] = useState("");
   const [logs, setLogs] = useState<ActivityLog[]>(initialLogs);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [editType, setEditType] = useState("");
+  const [editDuration, setEditDuration] = useState("");
+  const [editCalories, setEditCalories] = useState("");
 
   const totalBurned = useMemo(
     () =>
@@ -41,6 +50,26 @@ export default function ActivityClient({
       ),
     [logs]
   );
+
+  const durationValue = Number(duration);
+  const caloriesValue = Number(calories);
+  const durationError =
+    duration &&
+    (durationValue < minDuration || durationValue > maxDuration)
+      ? `Duree entre ${minDuration} et ${maxDuration} min.`
+      : null;
+  const caloriesError =
+    calories &&
+    (caloriesValue < minCalories || caloriesValue > maxCalories)
+      ? `Calories entre ${minCalories} et ${maxCalories}.`
+      : null;
+  const canSubmit =
+    !saving &&
+    type.trim().length > 0 &&
+    !durationError &&
+    !caloriesError &&
+    duration !== "" &&
+    calories !== "";
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -52,9 +81,6 @@ export default function ActivityClient({
       setSaving(false);
       return;
     }
-
-    const durationValue = Number(duration);
-    const caloriesValue = Number(calories);
 
     if (!type.trim() || !durationValue || !caloriesValue) {
       setError("Renseigne type, duree et calories.");
@@ -88,6 +114,94 @@ export default function ActivityClient({
     setSaving(false);
   };
 
+  const handleEdit = (entry: ActivityLog) => {
+    setEditingId(entry.id);
+    setEditType(entry.activity_type);
+    setEditDuration(entry.duration_min ? String(entry.duration_min) : "");
+    setEditCalories(entry.calories_burned ? String(entry.calories_burned) : "");
+    setError(null);
+  };
+
+  const handleCancelEdit = () => {
+    setEditingId(null);
+    setEditType("");
+    setEditDuration("");
+    setEditCalories("");
+  };
+
+  const handleUpdate = async (entryId: number) => {
+    const updatedDuration = Number(editDuration);
+    const updatedCalories = Number(editCalories);
+
+    if (!editType.trim()) {
+      setError("Type requis.");
+      return;
+    }
+    if (
+      !updatedDuration ||
+      updatedDuration < minDuration ||
+      updatedDuration > maxDuration
+    ) {
+      setError(`Duree entre ${minDuration} et ${maxDuration} min.`);
+      return;
+    }
+    if (
+      !updatedCalories ||
+      updatedCalories < minCalories ||
+      updatedCalories > maxCalories
+    ) {
+      setError(`Calories entre ${minCalories} et ${maxCalories}.`);
+      return;
+    }
+
+    const supabase = createSupabaseBrowserClient();
+    const { error: updateError } = await supabase
+      .from("activity_logs")
+      .update({
+        activity_type: editType.trim(),
+        duration_min: updatedDuration,
+        calories_burned: updatedCalories,
+      })
+      .eq("id", entryId);
+
+    if (updateError) {
+      setError(updateError.message);
+      return;
+    }
+
+    const { data } = await supabase
+      .from("activity_logs")
+      .select("id, activity_type, duration_min, calories_burned")
+      .eq("recorded_at", getISODate())
+      .order("created_at", { ascending: false });
+    setLogs((data ?? []) as ActivityLog[]);
+    handleCancelEdit();
+  };
+
+  const handleDelete = async (entryId: number) => {
+    if (!window.confirm("Supprimer cette activite ?")) {
+      return;
+    }
+
+    const supabase = createSupabaseBrowserClient();
+    const { error: deleteError } = await supabase
+      .from("activity_logs")
+      .delete()
+      .eq("id", entryId);
+
+    if (deleteError) {
+      setError(deleteError.message);
+      return;
+    }
+
+    const { data } = await supabase
+      .from("activity_logs")
+      .select("id, activity_type, duration_min, calories_burned")
+      .eq("recorded_at", getISODate())
+      .order("created_at", { ascending: false });
+    setLogs((data ?? []) as ActivityLog[]);
+  };
+
   return (
     <div className="space-y-6">
       <PageHeader
@@ -118,7 +232,12 @@ export default function ActivityClient({
                 placeholder="30"
                 value={duration}
                 onChange={(event) => setDuration(event.target.value)}
+                min={minDuration}
+                max={maxDuration}
               />
+              {durationError ? (
+                <p className="text-xs text-red-600">{durationError}</p>
+              ) : null}
             </div>
             <div className="space-y-2">
               <Label htmlFor="activity-calories">Calories brulees</Label>
@@ -128,10 +247,15 @@ export default function ActivityClient({
                 placeholder="210"
                 value={calories}
                 onChange={(event) => setCalories(event.target.value)}
+                min={minCalories}
+                max={maxCalories}
               />
+              {caloriesError ? (
+                <p className="text-xs text-red-600">{caloriesError}</p>
+              ) : null}
             </div>
             <div className="sm:col-span-2">
-              <Button type="submit" disabled={saving}>
+              <Button type="submit" disabled={!canSubmit}>
                 {saving ? "Ajout..." : "Ajouter"}
               </Button>
             </div>
@@ -165,17 +289,76 @@ export default function ActivityClient({
             logs.map((activity) => (
               <div
                 key={activity.id}
-                className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-[var(--border)] bg-white/70 px-4 py-3 text-sm"
+                className="rounded-2xl border border-[var(--border)] bg-white/70 px-4 py-3 text-sm"
               >
-                <span className="font-semibold text-[var(--foreground)]">
-                  {activity.activity_type}
-                </span>
-                <span className="text-[var(--muted)]">
-                  {activity.duration_min} min
-                </span>
-                <span className="text-[var(--foreground)]">
-                  {activity.calories_burned} kcal
-                </span>
+                {editingId === activity.id ? (
+                  <div className="flex flex-wrap items-center gap-3">
+                    <Input
+                      value={editType}
+                      onChange={(event) => setEditType(event.target.value)}
+                      className="flex-1"
+                    />
+                    <Input
+                      type="number"
+                      value={editDuration}
+                      onChange={(event) => setEditDuration(event.target.value)}
+                      className="w-28"
+                      min={minDuration}
+                      max={maxDuration}
+                    />
+                    <Input
+                      type="number"
+                      value={editCalories}
+                      onChange={(event) => setEditCalories(event.target.value)}
+                      className="w-28"
+                      min={minCalories}
+                      max={maxCalories}
+                    />
+                    <div className="flex items-center gap-2">
+                      <Button
+                        size="sm"
+                        onClick={() => handleUpdate(activity.id)}
+                      >
+                        Sauvegarder
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={handleCancelEdit}
+                      >
+                        Annuler
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <span className="font-semibold text-[var(--foreground)]">
+                      {activity.activity_type}
+                    </span>
+                    <span className="text-[var(--muted)]">
+                      {activity.duration_min} min
+                    </span>
+                    <span className="text-[var(--foreground)]">
+                      {activity.calories_burned} kcal
+                    </span>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => handleEdit(activity)}
+                      >
+                        Modifier
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleDelete(activity.id)}
+                      >
+                        Supprimer
+                      </Button>
+                    </div>
+                  </div>
+                )}
               </div>
             ))
           )}
