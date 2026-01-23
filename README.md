@@ -40,3 +40,11 @@ npm run dev
 ## Notes
 - Les secrets ne doivent jamais être committés. Utiliser uniquement `.env.local` et les variables Vercel.
 - Si OneSignal n'est pas configuré, l'UI désactive l'activation des notifications.
+
+## GitHub Actions (optionnel)
+Un workflow peut pousser les migrations Supabase automatiquement sur `main`.
+
+Secrets requis dans GitHub:
+- `SUPABASE_ACCESS_TOKEN`
+- `SUPABASE_PROJECT_REF` (ex: `pktqulzpsfezqnccwlud`)
+- `SUPABASE_DB_PASSWORD` (si requis par votre projet)
