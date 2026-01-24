@@ -64,7 +64,7 @@ export default function Home() {
           </div>
         </div>
 
-        <div className="order-first lg:order-last">
+        <div className="order-first -mx-6 px-6 sm:mx-0 sm:px-0 lg:order-last">
           <HeroAvatar />
         </div>
       </section>

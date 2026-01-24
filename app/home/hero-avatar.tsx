@@ -3,6 +3,7 @@
 import Image from "next/image";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/cn";
 
 const avatarSteps = [
   { weight: 60, src: "/images/guigui60kg.png" },
@@ -16,13 +17,20 @@ const snapPoints = [70, 80, 90, 100];
 const minWeight = 60;
 const maxWeight = 100;
 
-export function HeroAvatar() {
+type HeroAvatarProps = {
+  className?: string;
+};
+
+export function HeroAvatar({ className }: HeroAvatarProps) {
   const [weight, setWeight] = useState(85);
   const [autoPlay, setAutoPlay] = useState(false);
   const [isBouncing, setIsBouncing] = useState(false);
   const [snapEnabled, setSnapEnabled] = useState(false);
   const [speedLevel, setSpeedLevel] = useState(3);
+  const [pointerOffset, setPointerOffset] = useState({ x: 0, y: 0 });
+  const [scrollOffset, setScrollOffset] = useState(0);
   const directionRef = useRef<1 | -1>(-1);
+  const avatarRef = useRef<HTMLDivElement | null>(null);
 
   const { lower, upper, ratio } = useMemo(() => {
     const steps = avatarSteps;
@@ -81,6 +89,81 @@ export function HeroAvatar() {
     return () => window.clearInterval(intervalId);
   }, [autoPlay, speedLevel]);
 
+  useEffect(() => {
+    const container = avatarRef.current;
+    if (!container) {
+      return;
+    }
+
+    let pointerFrame = 0;
+    let scrollFrame = 0;
+    const canHover = window.matchMedia("(hover: hover)").matches;
+
+    const updatePointer = (event: PointerEvent) => {
+      if (!container) {
+        return;
+      }
+      const rect = container.getBoundingClientRect();
+      const x = (event.clientX - rect.left) / rect.width - 0.5;
+      const y = (event.clientY - rect.top) / rect.height - 0.5;
+      setPointerOffset({ x, y });
+    };
+
+    const handlePointerMove = (event: PointerEvent) => {
+      if (!canHover) {
+        return;
+      }
+      if (pointerFrame) {
+        cancelAnimationFrame(pointerFrame);
+      }
+      pointerFrame = requestAnimationFrame(() => updatePointer(event));
+    };
+
+    const handlePointerLeave = () => {
+      setPointerOffset({ x: 0, y: 0 });
+    };
+
+    const handleScroll = () => {
+      if (scrollFrame) {
+        cancelAnimationFrame(scrollFrame);
+      }
+      scrollFrame = requestAnimationFrame(() => {
+        if (!container) {
+          return;
+        }
+        const rect = container.getBoundingClientRect();
+        const viewport = window.innerHeight || 1;
+        const centerOffset =
+          (rect.top + rect.height / 2 - viewport / 2) / (viewport / 2);
+        const clamped = Math.max(-1, Math.min(1, centerOffset));
+        setScrollOffset(clamped * -6);
+      });
+    };
+
+    if (canHover) {
+      container.addEventListener("pointermove", handlePointerMove);
+      container.addEventListener("pointerleave", handlePointerLeave);
+    }
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    window.addEventListener("resize", handleScroll);
+    handleScroll();
+
+    return () => {
+      if (canHover) {
+        container.removeEventListener("pointermove", handlePointerMove);
+        container.removeEventListener("pointerleave", handlePointerLeave);
+      }
+      window.removeEventListener("scroll", handleScroll);
+      window.removeEventListener("resize", handleScroll);
+      if (pointerFrame) {
+        cancelAnimationFrame(pointerFrame);
+      }
+      if (scrollFrame) {
+        cancelAnimationFrame(scrollFrame);
+      }
+    };
+  }, []);
+
   const applySnap = () => {
     if (!snapEnabled) {
       return;
@@ -91,8 +174,11 @@ export function HeroAvatar() {
     setWeight(closest);
   };
 
+  const parallaxX = pointerOffset.x * 10;
+  const parallaxY = pointerOffset.y * 14 + scrollOffset;
+
   return (
-    <div className="relative space-y-6">
+    <div className={cn("relative space-y-6", className)}>
       <div className="pointer-events-none absolute -top-12 left-1/2 h-40 w-40 -translate-x-1/2 rounded-full bg-[radial-gradient(circle_at_center,rgba(12,141,133,0.35),transparent_70%)] blur-2xl" />
 
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -104,7 +190,10 @@ export function HeroAvatar() {
         </span>
       </div>
 
-      <div className="relative mx-auto w-full max-w-[420px] sm:max-w-[520px] lg:max-w-[600px]">
+      <div
+        ref={avatarRef}
+        className="relative mx-auto w-full max-w-[420px] sm:max-w-[520px] lg:max-w-[600px]"
+      >
         <div className="pointer-events-none absolute -inset-8 rounded-[40px] bg-[radial-gradient(circle_at_center,rgba(12,141,133,0.18),transparent_70%)] blur-2xl" />
         <div
           className={`relative aspect-[2/3] ${
@@ -121,7 +210,9 @@ export function HeroAvatar() {
             className="object-contain object-bottom drop-shadow-[0_30px_60px_rgba(17,16,14,0.16)] transition-[opacity,transform] duration-700"
             style={{
               opacity: 1 - ratio,
-              transform: "translateY(0px) scale(1)",
+              transform: `translate(${parallaxX * 0.6}px, ${
+                parallaxY * 0.6
+              }px) scale(1.02)`,
               transitionTimingFunction: "cubic-bezier(0.2, 0.9, 0.2, 1)",
             }}
           />
@@ -133,7 +224,7 @@ export function HeroAvatar() {
             className="object-contain object-bottom drop-shadow-[0_30px_60px_rgba(17,16,14,0.16)] transition-[opacity,transform] duration-700"
             style={{
               opacity: ratio,
-              transform: "translateY(0px) scale(1)",
+              transform: `translate(${parallaxX}px, ${parallaxY}px) scale(1.02)`,
               transitionTimingFunction: "cubic-bezier(0.2, 0.9, 0.2, 1)",
             }}
           />
