@@ -34,6 +34,8 @@ export default function SettingsClient({
   const [diagnostics, setDiagnostics] = useState<{
     scriptPresent: boolean;
     oneSignalPresent: boolean;
+    deferredPresent: boolean;
+    deferredLength: number;
     permission: NotificationPermission | "unsupported";
   } | null>(null);
 
@@ -71,6 +73,11 @@ export default function SettingsClient({
         'script[src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js"]'
       )
     );
+    const deferredQueue = (
+      window as Window & { OneSignalDeferred?: unknown[] }
+    ).OneSignalDeferred;
+    const deferredPresent = Array.isArray(deferredQueue);
+    const deferredLength = deferredQueue?.length ?? 0;
     const oneSignalPresent = Boolean(
       (window as Window & { OneSignal?: unknown }).OneSignal
     );
@@ -78,7 +85,13 @@ export default function SettingsClient({
       typeof Notification === "undefined"
         ? "unsupported"
         : Notification.permission;
-    setDiagnostics({ scriptPresent, oneSignalPresent, permission });
+    setDiagnostics({
+      scriptPresent,
+      oneSignalPresent,
+      deferredPresent,
+      deferredLength,
+      permission,
+    });
   }, [debugEnabled]);
 
   const handleEnable = async () => {
@@ -92,6 +105,10 @@ export default function SettingsClient({
         setMessage(
           "Impossible de charger OneSignal (SDK bloque ou CSP). Verifie les bloqueurs."
         );
+      } else if (initResult.reason === "sdk-timeout") {
+        setMessage("OneSignal ne repond pas apres chargement.");
+      } else if (initResult.reason === "sdk-init-failed") {
+        setMessage("Echec d'initialisation OneSignal.");
       } else {
         setMessage("OneSignal SDK indisponible apres chargement.");
       }
@@ -224,6 +241,11 @@ export default function SettingsClient({
             </div>
             <div>
               window.OneSignal: {diagnostics?.oneSignalPresent ? "yes" : "no"}
+            </div>
+            <div>
+              OneSignalDeferred:{" "}
+              {diagnostics?.deferredPresent ? "yes" : "no"} (
+              {diagnostics?.deferredLength ?? 0})
             </div>
             <div>
               notification permission: {diagnostics?.permission ?? "--"}

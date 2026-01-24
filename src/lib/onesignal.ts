@@ -50,7 +50,27 @@ type OneSignalSDK = {
   getUserId?: () => Promise<string | null>;
 };
 
-const getOneSignal = (): OneSignalSDK | null => {
+type OneSignalDeferred = Array<(oneSignal: OneSignalSDK) => void>;
+
+let oneSignalInstance: OneSignalSDK | null = null;
+
+const getOneSignalDeferred = (): OneSignalDeferred | null => {
+  if (typeof window === "undefined") {
+    return null;
+  }
+  const win = window as typeof window & {
+    OneSignalDeferred?: OneSignalDeferred;
+  };
+  if (!win.OneSignalDeferred) {
+    win.OneSignalDeferred = [];
+  }
+  return win.OneSignalDeferred;
+};
+
+const getOneSignalInstance = (): OneSignalSDK | null => {
+  if (oneSignalInstance) {
+    return oneSignalInstance;
+  }
   if (typeof window === "undefined") {
     return null;
   }
@@ -104,14 +124,41 @@ export const initOneSignal = async (
     initPromise = (async () => {
       try {
         await loadScript();
-        const OneSignal = getOneSignal();
-        if (!OneSignal?.init) {
+        const deferred = getOneSignalDeferred();
+        if (!deferred) {
           return { ok: false, reason: "sdk-unavailable" };
         }
-        await OneSignal.init(initOptions);
-        initialized = true;
-        initializedAppId = initOptions.appId;
-        return { ok: true };
+        return await new Promise<InitResult>((resolve) => {
+          let settled = false;
+          const finalize = (result: InitResult) => {
+            if (settled) {
+              return;
+            }
+            settled = true;
+            resolve(result);
+          };
+          const timeoutId = setTimeout(() => {
+            finalize({ ok: false, reason: "sdk-timeout" });
+          }, 8000);
+          deferred.push(async (OneSignal) => {
+            oneSignalInstance = OneSignal;
+            try {
+              if (!OneSignal?.init) {
+                clearTimeout(timeoutId);
+                finalize({ ok: false, reason: "sdk-unavailable" });
+                return;
+              }
+              await OneSignal.init(initOptions);
+              initialized = true;
+              initializedAppId = initOptions.appId;
+              clearTimeout(timeoutId);
+              finalize({ ok: true });
+            } catch {
+              clearTimeout(timeoutId);
+              finalize({ ok: false, reason: "sdk-init-failed" });
+            }
+          });
+        });
       } catch {
         return { ok: false, reason: "sdk-load-failed" };
       }
@@ -127,7 +174,7 @@ export const subscribeToPush = async (options?: Partial<OneSignalInitOptions>) =
     return initResult;
   }
 
-  const OneSignal = getOneSignal();
+  const OneSignal = getOneSignalInstance();
   if (!OneSignal) {
     return { ok: false, reason: "sdk-unavailable" };
   }
@@ -151,7 +198,7 @@ export const unsubscribeFromPush = async (
     return initResult;
   }
 
-  const OneSignal = getOneSignal();
+  const OneSignal = getOneSignalInstance();
   if (!OneSignal) {
     return { ok: false, reason: "sdk-unavailable" };
   }
@@ -173,7 +220,7 @@ export const getSubscriptionId = async (
     return null;
   }
 
-  const OneSignal = getOneSignal();
+  const OneSignal = getOneSignalInstance();
   if (!OneSignal) {
     return null;
   }
@@ -195,7 +242,7 @@ export const isPushEnabled = async (options?: Partial<OneSignalInitOptions>) => 
     return false;
   }
 
-  const OneSignal = getOneSignal();
+  const OneSignal = getOneSignalInstance();
   if (!OneSignal) {
     return false;
   }
