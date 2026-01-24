@@ -5,19 +5,23 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 
 const avatarSteps = [
+  { weight: 60, src: "/images/guigui60kg.png" },
   { weight: 70, src: "/images/guigui70kg.png" },
   { weight: 80, src: "/images/guigui80kg.png" },
   { weight: 90, src: "/images/guigui90kg.png" },
   { weight: 100, src: "/images/guigui100kg.png" },
 ];
 
-const minWeight = 70;
+const snapPoints = [70, 80, 90, 100];
+const minWeight = 60;
 const maxWeight = 100;
 
 export function HeroAvatar() {
   const [weight, setWeight] = useState(85);
   const [autoPlay, setAutoPlay] = useState(false);
   const [isBouncing, setIsBouncing] = useState(false);
+  const [snapEnabled, setSnapEnabled] = useState(false);
+  const [speedLevel, setSpeedLevel] = useState(3);
   const directionRef = useRef<1 | -1>(-1);
 
   const { lower, upper, ratio } = useMemo(() => {
@@ -60,6 +64,7 @@ export function HeroAvatar() {
     if (!autoPlay) {
       return;
     }
+    const intervalMs = Math.max(90, 400 - speedLevel * 60);
     const intervalId = window.setInterval(() => {
       setWeight((current) => {
         let next = current + directionRef.current;
@@ -72,9 +77,19 @@ export function HeroAvatar() {
         }
         return next;
       });
-    }, 140);
+    }, intervalMs);
     return () => window.clearInterval(intervalId);
-  }, [autoPlay]);
+  }, [autoPlay, speedLevel]);
+
+  const applySnap = () => {
+    if (!snapEnabled) {
+      return;
+    }
+    const closest = snapPoints.reduce((prev, current) =>
+      Math.abs(current - weight) < Math.abs(prev - weight) ? current : prev
+    );
+    setWeight(closest);
+  };
 
   return (
     <div className="relative rounded-[32px] border border-[var(--border)] bg-white/70 p-6 shadow-[0_30px_80px_rgba(17,16,14,0.12)] backdrop-blur-xl">
@@ -126,7 +141,7 @@ export function HeroAvatar() {
 
         <div className="space-y-3">
           <div className="flex items-center justify-between text-xs font-semibold uppercase tracking-[0.2em] text-[var(--muted)]">
-            <span>70 kg</span>
+            <span>60 kg</span>
             <span>100 kg</span>
           </div>
           <input
@@ -141,14 +156,17 @@ export function HeroAvatar() {
                 setAutoPlay(false);
               }
             }}
+            onMouseUp={applySnap}
+            onTouchEnd={applySnap}
+            onKeyUp={applySnap}
             className="weight-slider w-full"
             style={{
               background: `linear-gradient(90deg, var(--accent) 0%, var(--accent-strong) ${progress}%, rgba(10,109,105,0.12) ${progress}%)`,
             }}
             aria-label="Evolution du poids"
           />
-          <div className="grid grid-cols-4 text-xs font-semibold text-[var(--muted)]">
-            {[70, 80, 90, 100].map((value) => (
+          <div className="grid grid-cols-5 text-xs font-semibold text-[var(--muted)]">
+            {[60, 70, 80, 90, 100].map((value) => (
               <span key={value} className="text-center">
                 {value}
               </span>
@@ -161,15 +179,42 @@ export function HeroAvatar() {
                 {weight} kg
               </span>
             </p>
-            <Button
-              type="button"
-              size="sm"
-              variant={autoPlay ? "primary" : "soft"}
-              onClick={() => setAutoPlay((value) => !value)}
-              aria-pressed={autoPlay}
-            >
-              {autoPlay ? "Pause auto" : "Auto-play"}
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button
+                type="button"
+                size="sm"
+                variant={snapEnabled ? "primary" : "soft"}
+                onClick={() => setSnapEnabled((value) => !value)}
+                aria-pressed={snapEnabled}
+              >
+                Snap
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant={autoPlay ? "primary" : "soft"}
+                onClick={() => setAutoPlay((value) => !value)}
+                aria-pressed={autoPlay}
+              >
+                {autoPlay ? "Pause auto" : "Auto-play"}
+              </Button>
+            </div>
+          </div>
+          <div className="flex flex-wrap items-center gap-3 text-xs text-[var(--muted)]">
+            <span>Vitesse auto-play</span>
+            <input
+              type="range"
+              min={1}
+              max={5}
+              step={1}
+              value={speedLevel}
+              onChange={(event) => setSpeedLevel(Number(event.target.value))}
+              className="speed-slider w-32"
+              aria-label="Vitesse auto-play"
+            />
+            <span className="text-[var(--foreground)]">
+              {["Lent", "Fluide", "Modere", "Rapide", "Turbo"][speedLevel - 1]}
+            </span>
           </div>
           <p className="text-xs text-[var(--muted)]">
             Glisse pour voir l&apos;avatar evoluer, ou lance l&apos;auto-play.

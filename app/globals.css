@@ -91,6 +91,33 @@ a {
   background: transparent;
 }
 
+.speed-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(10, 109, 105, 0.15);
+}
+
+.speed-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  height: 18px;
+  width: 18px;
+  border-radius: 999px;
+  background: #fff9f1;
+  border: 2px solid var(--accent-strong);
+  box-shadow: 0 6px 16px rgba(10, 109, 105, 0.2);
+}
+
+.speed-slider::-moz-range-thumb {
+  height: 18px;
+  width: 18px;
+  border-radius: 999px;
+  background: #fff9f1;
+  border: 2px solid var(--accent-strong);
+  box-shadow: 0 6px 16px rgba(10, 109, 105, 0.2);
+}
+
 @keyframes avatarSpring {
   0% {
     transform: translateY(0) scale(1);
