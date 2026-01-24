@@ -17,11 +17,13 @@ type Status = "unknown" | "subscribed" | "unsubscribed";
 type SettingsClientProps = {
   appId: string;
   safariWebId: string;
+  debugEnabled: boolean;
 };
 
 export default function SettingsClient({
   appId,
   safariWebId,
+  debugEnabled,
 }: SettingsClientProps) {
   const isConfigured = Boolean(appId);
   const [status, setStatus] = useState<Status>(
@@ -29,6 +31,11 @@ export default function SettingsClient({
   );
   const [message, setMessage] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [diagnostics, setDiagnostics] = useState<{
+    scriptPresent: boolean;
+    oneSignalPresent: boolean;
+    permission: NotificationPermission | "unsupported";
+  } | null>(null);
 
   const initOptions = useCallback(
     () => ({
@@ -52,20 +59,42 @@ export default function SettingsClient({
     if (!isConfigured) {
       return;
     }
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     void refreshStatus();
   }, [isConfigured, refreshStatus]);
+
+  useEffect(() => {
+    if (!debugEnabled) {
+      return;
+    }
+    const scriptPresent = Boolean(
+      document.querySelector(
+        'script[src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js"]'
+      )
+    );
+    const oneSignalPresent = Boolean(
+      (window as Window & { OneSignal?: unknown }).OneSignal
+    );
+    const permission =
+      typeof Notification === "undefined"
+        ? "unsupported"
+        : Notification.permission;
+    setDiagnostics({ scriptPresent, oneSignalPresent, permission });
+  }, [debugEnabled]);
 
   const handleEnable = async () => {
     setLoading(true);
     setMessage(null);
     const initResult = await initOneSignal(initOptions());
     if (!initResult.ok) {
-      setMessage(
-        initResult.reason === "missing-app-id"
-          ? "OneSignal n'est pas configure."
-          : "Impossible de charger OneSignal."
-      );
+      if (initResult.reason === "missing-app-id") {
+        setMessage("OneSignal n'est pas configure.");
+      } else if (initResult.reason === "sdk-load-failed") {
+        setMessage(
+          "Impossible de charger OneSignal (SDK bloque ou CSP). Verifie les bloqueurs."
+        );
+      } else {
+        setMessage("OneSignal SDK indisponible apres chargement.");
+      }
       setLoading(false);
       return;
     }
@@ -181,6 +210,27 @@ export default function SettingsClient({
           <p className="text-sm text-[var(--muted)]">{message}</p>
         ) : null}
       </Card>
+
+      {debugEnabled ? (
+        <Card className="space-y-3" variant="outline">
+          <h3 className="text-sm font-semibold text-[var(--foreground)]">
+            OneSignal Debug
+          </h3>
+          <div className="text-xs text-[var(--muted)]">
+            <div>appId: {appId || "--"}</div>
+            <div>safariWebId: {safariWebId || "--"}</div>
+            <div>
+              script loaded: {diagnostics?.scriptPresent ? "yes" : "no"}
+            </div>
+            <div>
+              window.OneSignal: {diagnostics?.oneSignalPresent ? "yes" : "no"}
+            </div>
+            <div>
+              notification permission: {diagnostics?.permission ?? "--"}
+            </div>
+          </div>
+        </Card>
+      ) : null}
     </div>
   );
 }
