@@ -31,12 +31,12 @@ export default function Home() {
         </div>
       </header>
 
-      <section className="relative mx-auto grid w-full max-w-6xl gap-10 px-6 pb-16 pt-10 lg:grid-cols-[0.95fr_1.05fr] lg:items-center">
-        <div className="space-y-7 text-center lg:text-left">
+      <section className="relative mx-auto grid w-full max-w-6xl gap-10 px-6 pb-16 pt-10 lg:grid-cols-[1.05fr_0.95fr] lg:items-start lg:gap-16">
+        <div className="space-y-7 text-center lg:pr-6 lg:text-left">
           <div className="inline-flex items-center gap-2 rounded-full bg-[var(--accent-soft)] px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-[var(--accent-strong)]">
             Phase 1: suivi regime
           </div>
-          <h1 className="text-4xl font-semibold tracking-tight text-[var(--foreground)] sm:text-5xl">
+          <h1 className="text-4xl font-semibold tracking-tight text-[var(--foreground)] sm:text-5xl lg:text-[3.35rem]">
             EvoShape te montre le mouvement, pas les chiffres froids.
           </h1>
           <p className="max-w-xl text-base text-[var(--muted)] sm:text-lg">
@@ -64,7 +64,7 @@ export default function Home() {
           </div>
         </div>
 
-        <div className="order-first -mx-6 px-6 sm:mx-0 sm:px-0 lg:order-last">
+        <div className="order-first -mx-4 px-4 sm:mx-0 sm:px-0 lg:order-last">
           <HeroAvatar />
         </div>
       </section>

@@ -192,11 +192,11 @@ export function HeroAvatar({ className }: HeroAvatarProps) {
 
       <div
         ref={avatarRef}
-        className="relative mx-auto w-full max-w-[420px] sm:max-w-[520px] lg:max-w-[600px]"
+        className="relative mx-auto w-full max-w-[360px] sm:max-w-[440px] lg:max-w-[500px]"
       >
         <div className="pointer-events-none absolute -inset-8 rounded-[40px] bg-[radial-gradient(circle_at_center,rgba(12,141,133,0.18),transparent_70%)] blur-2xl" />
         <div
-          className={`relative aspect-[2/3] ${
+          className={`relative aspect-[3/4] ${
             isBouncing ? "avatar-spring" : ""
           }`}
         >
@@ -206,13 +206,13 @@ export function HeroAvatar({ className }: HeroAvatarProps) {
             alt={`Avatar ${lower.weight} kg`}
             fill
             priority
-            sizes="(max-width: 768px) 86vw, 600px"
+            sizes="(max-width: 768px) 80vw, 520px"
             className="object-contain object-bottom drop-shadow-[0_30px_60px_rgba(17,16,14,0.16)] transition-[opacity,transform] duration-700"
             style={{
               opacity: 1 - ratio,
               transform: `translate(${parallaxX * 0.6}px, ${
                 parallaxY * 0.6
-              }px) scale(1.02)`,
+              }px) scale(0.96)`,
               transitionTimingFunction: "cubic-bezier(0.2, 0.9, 0.2, 1)",
             }}
           />
@@ -220,11 +220,11 @@ export function HeroAvatar({ className }: HeroAvatarProps) {
             src={upper.src}
             alt={`Avatar ${upper.weight} kg`}
             fill
-            sizes="(max-width: 768px) 86vw, 600px"
+            sizes="(max-width: 768px) 80vw, 520px"
             className="object-contain object-bottom drop-shadow-[0_30px_60px_rgba(17,16,14,0.16)] transition-[opacity,transform] duration-700"
             style={{
               opacity: ratio,
-              transform: `translate(${parallaxX}px, ${parallaxY}px) scale(1.02)`,
+              transform: `translate(${parallaxX}px, ${parallaxY}px) scale(0.96)`,
               transitionTimingFunction: "cubic-bezier(0.2, 0.9, 0.2, 1)",
             }}
           />
