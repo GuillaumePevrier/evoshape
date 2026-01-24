@@ -92,134 +92,134 @@ export function HeroAvatar() {
   };
 
   return (
-    <div className="relative rounded-[32px] border border-[var(--border)] bg-white/70 p-6 shadow-[0_30px_80px_rgba(17,16,14,0.12)] backdrop-blur-xl">
-      <div className="pointer-events-none absolute inset-0 rounded-[32px] bg-[radial-gradient(circle_at_top,rgba(12,141,133,0.2),transparent_55%)]" />
-      <div className="relative space-y-6">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--muted)]">
-            Evolution du poids
+    <div className="relative space-y-6">
+      <div className="pointer-events-none absolute -top-12 left-1/2 h-40 w-40 -translate-x-1/2 rounded-full bg-[radial-gradient(circle_at_center,rgba(12,141,133,0.35),transparent_70%)] blur-2xl" />
+
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--muted)]">
+          Evolution du poids
+        </p>
+        <span className="rounded-full bg-[var(--accent-soft)] px-3 py-1 text-xs font-semibold text-[var(--accent-strong)]">
+          {weight} kg
+        </span>
+      </div>
+
+      <div className="relative mx-auto w-full max-w-[420px] sm:max-w-[520px] lg:max-w-[600px]">
+        <div className="pointer-events-none absolute -inset-8 rounded-[40px] bg-[radial-gradient(circle_at_center,rgba(12,141,133,0.18),transparent_70%)] blur-2xl" />
+        <div
+          className={`relative aspect-[2/3] ${
+            isBouncing ? "avatar-spring" : ""
+          }`}
+        >
+          <div className="pointer-events-none absolute inset-x-8 bottom-6 h-8 rounded-full bg-[radial-gradient(circle_at_center,rgba(17,16,14,0.25),transparent_70%)] blur-2xl" />
+          <Image
+            src={lower.src}
+            alt={`Avatar ${lower.weight} kg`}
+            fill
+            priority
+            sizes="(max-width: 768px) 86vw, 600px"
+            className="object-contain object-bottom drop-shadow-[0_30px_60px_rgba(17,16,14,0.16)] transition-[opacity,transform] duration-700"
+            style={{
+              opacity: 1 - ratio,
+              transform: "translateY(0px) scale(1)",
+              transitionTimingFunction: "cubic-bezier(0.2, 0.9, 0.2, 1)",
+            }}
+          />
+          <Image
+            src={upper.src}
+            alt={`Avatar ${upper.weight} kg`}
+            fill
+            sizes="(max-width: 768px) 86vw, 600px"
+            className="object-contain object-bottom drop-shadow-[0_30px_60px_rgba(17,16,14,0.16)] transition-[opacity,transform] duration-700"
+            style={{
+              opacity: ratio,
+              transform: "translateY(0px) scale(1)",
+              transitionTimingFunction: "cubic-bezier(0.2, 0.9, 0.2, 1)",
+            }}
+          />
+        </div>
+      </div>
+
+      <div className="space-y-3">
+        <div className="flex items-center justify-between text-xs font-semibold uppercase tracking-[0.2em] text-[var(--muted)]">
+          <span>60 kg</span>
+          <span>100 kg</span>
+        </div>
+        <input
+          type="range"
+          min={minWeight}
+          max={maxWeight}
+          step={1}
+          value={weight}
+          onChange={(event) => {
+            setWeight(Number(event.target.value));
+            if (autoPlay) {
+              setAutoPlay(false);
+            }
+          }}
+          onMouseUp={applySnap}
+          onTouchEnd={applySnap}
+          onKeyUp={applySnap}
+          className="weight-slider w-full"
+          style={{
+            background: `linear-gradient(90deg, var(--accent) 0%, var(--accent-strong) ${progress}%, rgba(10,109,105,0.12) ${progress}%)`,
+          }}
+          aria-label="Evolution du poids"
+        />
+        <div className="grid grid-cols-5 text-xs font-semibold text-[var(--muted)]">
+          {[60, 70, 80, 90, 100].map((value) => (
+            <span key={value} className="text-center">
+              {value}
+            </span>
+          ))}
+        </div>
+        <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-[var(--muted)]">
+          <p>
+            Objectif du mois:{" "}
+            <span className="font-semibold text-[var(--foreground)]">
+              {weight} kg
+            </span>
           </p>
-          <span className="rounded-full bg-[var(--accent-soft)] px-3 py-1 text-xs font-semibold text-[var(--accent-strong)]">
-            {weight} kg
-          </span>
-        </div>
-
-        <div className="relative mx-auto w-full max-w-[380px]">
-          <div className="absolute -inset-4 rounded-[28px] bg-[radial-gradient(circle_at_center,rgba(12,141,133,0.12),transparent_70%)]" />
-          <div
-            className={`relative aspect-[2/3] overflow-hidden rounded-[28px] border border-white/70 bg-[linear-gradient(180deg,#fdf6ed,rgba(253,246,237,0.4))] shadow-[0_20px_50px_rgba(17,16,14,0.1)] ${
-              isBouncing ? "avatar-spring" : ""
-            }`}
-          >
-            <Image
-              src={lower.src}
-              alt={`Avatar ${lower.weight} kg`}
-              fill
-              priority
-              sizes="(max-width: 768px) 80vw, 420px"
-              className="object-contain object-bottom transition-[opacity,transform] duration-700"
-              style={{
-                opacity: 1 - ratio,
-                transform: "translateY(0px) scale(1)",
-                transitionTimingFunction: "cubic-bezier(0.2, 0.9, 0.2, 1)",
-              }}
-            />
-            <Image
-              src={upper.src}
-              alt={`Avatar ${upper.weight} kg`}
-              fill
-              sizes="(max-width: 768px) 80vw, 420px"
-              className="object-contain object-bottom transition-[opacity,transform] duration-700"
-              style={{
-                opacity: ratio,
-                transform: "translateY(0px) scale(1)",
-                transitionTimingFunction: "cubic-bezier(0.2, 0.9, 0.2, 1)",
-              }}
-            />
+          <div className="flex items-center gap-2">
+            <Button
+              type="button"
+              size="sm"
+              variant={snapEnabled ? "primary" : "soft"}
+              onClick={() => setSnapEnabled((value) => !value)}
+              aria-pressed={snapEnabled}
+            >
+              Snap
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant={autoPlay ? "primary" : "soft"}
+              onClick={() => setAutoPlay((value) => !value)}
+              aria-pressed={autoPlay}
+            >
+              {autoPlay ? "Pause auto" : "Auto-play"}
+            </Button>
           </div>
         </div>
-
-        <div className="space-y-3">
-          <div className="flex items-center justify-between text-xs font-semibold uppercase tracking-[0.2em] text-[var(--muted)]">
-            <span>60 kg</span>
-            <span>100 kg</span>
-          </div>
+        <div className="flex flex-wrap items-center gap-3 text-xs text-[var(--muted)]">
+          <span>Vitesse auto-play</span>
           <input
             type="range"
-            min={minWeight}
-            max={maxWeight}
+            min={1}
+            max={5}
             step={1}
-            value={weight}
-            onChange={(event) => {
-              setWeight(Number(event.target.value));
-              if (autoPlay) {
-                setAutoPlay(false);
-              }
-            }}
-            onMouseUp={applySnap}
-            onTouchEnd={applySnap}
-            onKeyUp={applySnap}
-            className="weight-slider w-full"
-            style={{
-              background: `linear-gradient(90deg, var(--accent) 0%, var(--accent-strong) ${progress}%, rgba(10,109,105,0.12) ${progress}%)`,
-            }}
-            aria-label="Evolution du poids"
+            value={speedLevel}
+            onChange={(event) => setSpeedLevel(Number(event.target.value))}
+            className="speed-slider w-32"
+            aria-label="Vitesse auto-play"
           />
-          <div className="grid grid-cols-5 text-xs font-semibold text-[var(--muted)]">
-            {[60, 70, 80, 90, 100].map((value) => (
-              <span key={value} className="text-center">
-                {value}
-              </span>
-            ))}
-          </div>
-          <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-[var(--muted)]">
-            <p>
-              Objectif du mois:{" "}
-              <span className="font-semibold text-[var(--foreground)]">
-                {weight} kg
-              </span>
-            </p>
-            <div className="flex items-center gap-2">
-              <Button
-                type="button"
-                size="sm"
-                variant={snapEnabled ? "primary" : "soft"}
-                onClick={() => setSnapEnabled((value) => !value)}
-                aria-pressed={snapEnabled}
-              >
-                Snap
-              </Button>
-              <Button
-                type="button"
-                size="sm"
-                variant={autoPlay ? "primary" : "soft"}
-                onClick={() => setAutoPlay((value) => !value)}
-                aria-pressed={autoPlay}
-              >
-                {autoPlay ? "Pause auto" : "Auto-play"}
-              </Button>
-            </div>
-          </div>
-          <div className="flex flex-wrap items-center gap-3 text-xs text-[var(--muted)]">
-            <span>Vitesse auto-play</span>
-            <input
-              type="range"
-              min={1}
-              max={5}
-              step={1}
-              value={speedLevel}
-              onChange={(event) => setSpeedLevel(Number(event.target.value))}
-              className="speed-slider w-32"
-              aria-label="Vitesse auto-play"
-            />
-            <span className="text-[var(--foreground)]">
-              {["Lent", "Fluide", "Modere", "Rapide", "Turbo"][speedLevel - 1]}
-            </span>
-          </div>
-          <p className="text-xs text-[var(--muted)]">
-            Glisse pour voir l&apos;avatar evoluer, ou lance l&apos;auto-play.
-          </p>
+          <span className="text-[var(--foreground)]">
+            {["Lent", "Fluide", "Modere", "Rapide", "Turbo"][speedLevel - 1]}
+          </span>
         </div>
+        <p className="text-xs text-[var(--muted)]">
+          Glisse pour voir l&apos;avatar evoluer, ou lance l&apos;auto-play.
+        </p>
       </div>
     </div>
   );

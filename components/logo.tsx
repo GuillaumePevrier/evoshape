@@ -3,15 +3,16 @@ import { cn } from "@/lib/cn";
 type LogoProps = {
   className?: string;
   size?: "sm" | "md" | "lg";
+  labelClassName?: string;
 };
 
 const sizeMap = {
   sm: "h-8 w-8",
   md: "h-10 w-10",
-  lg: "h-12 w-12",
+  lg: "h-14 w-14",
 };
 
-export function Logo({ className, size = "md" }: LogoProps) {
+export function Logo({ className, size = "md", labelClassName }: LogoProps) {
   return (
     <div className={cn("flex items-center gap-3", className)}>
       <div
@@ -21,7 +22,11 @@ export function Logo({ className, size = "md" }: LogoProps) {
         )}
         aria-hidden="true"
       />
-      <span className="text-lg font-semibold tracking-tight">EvoShape</span>
+      <span
+        className={cn("text-lg font-semibold tracking-tight", labelClassName)}
+      >
+        EvoShape
+      </span>
     </div>
   );
 }
