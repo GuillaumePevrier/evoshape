@@ -31,11 +31,21 @@ export default function SettingsClient({
   );
   const [message, setMessage] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [support, setSupport] = useState<{
+    notifications: boolean;
+    serviceWorker: boolean;
+  }>({ notifications: true, serviceWorker: true });
+  const [permission, setPermission] = useState<
+    NotificationPermission | "unsupported"
+  >("unsupported");
   const [diagnostics, setDiagnostics] = useState<{
     scriptPresent: boolean;
     oneSignalPresent: boolean;
     deferredPresent: boolean;
     deferredLength: number;
+    serviceWorkerSupported: boolean;
+    serviceWorkerRegistered: boolean;
+    serviceWorkerScript: string | null;
     permission: NotificationPermission | "unsupported";
   } | null>(null);
 
@@ -53,9 +63,25 @@ export default function SettingsClient({
       setStatus("unknown");
       return;
     }
+    if (typeof Notification !== "undefined") {
+      setPermission(Notification.permission);
+    }
     const enabled = await isPushEnabled(initOptions());
     setStatus(enabled ? "subscribed" : "unsubscribed");
   }, [initOptions, isConfigured]);
+
+  useEffect(() => {
+    const notificationsSupported = typeof Notification !== "undefined";
+    const serviceWorkerSupported =
+      typeof navigator !== "undefined" && "serviceWorker" in navigator;
+    setSupport({
+      notifications: notificationsSupported,
+      serviceWorker: serviceWorkerSupported,
+    });
+    setPermission(
+      notificationsSupported ? Notification.permission : "unsupported"
+    );
+  }, []);
 
   useEffect(() => {
     if (!isConfigured) {
@@ -68,6 +94,7 @@ export default function SettingsClient({
     if (!debugEnabled) {
       return;
     }
+    let cancelled = false;
     const scriptPresent = Boolean(
       document.querySelector(
         'script[src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js"]'
@@ -81,17 +108,68 @@ export default function SettingsClient({
     const oneSignalPresent = Boolean(
       (window as Window & { OneSignal?: unknown }).OneSignal
     );
-    const permission =
+    const serviceWorkerSupported =
+      typeof navigator !== "undefined" && "serviceWorker" in navigator;
+    const permissionValue =
       typeof Notification === "undefined"
         ? "unsupported"
         : Notification.permission;
-    setDiagnostics({
-      scriptPresent,
-      oneSignalPresent,
-      deferredPresent,
-      deferredLength,
-      permission,
-    });
+    if (!serviceWorkerSupported) {
+      setDiagnostics({
+        scriptPresent,
+        oneSignalPresent,
+        deferredPresent,
+        deferredLength,
+        serviceWorkerSupported: false,
+        serviceWorkerRegistered: false,
+        serviceWorkerScript: null,
+        permission: permissionValue,
+      });
+      return;
+    }
+    void navigator.serviceWorker
+      .getRegistrations()
+      .then((registrations) => {
+        const matching = registrations.find((registration) => {
+          const urls = [
+            registration.active?.scriptURL,
+            registration.waiting?.scriptURL,
+            registration.installing?.scriptURL,
+          ].filter(Boolean) as string[];
+          return urls.some((url) => url.includes("OneSignalSDKWorker.js"));
+        });
+        if (cancelled) {
+          return;
+        }
+        setDiagnostics({
+          scriptPresent,
+          oneSignalPresent,
+          deferredPresent,
+          deferredLength,
+          serviceWorkerSupported: true,
+          serviceWorkerRegistered: Boolean(matching),
+          serviceWorkerScript: matching?.active?.scriptURL ?? null,
+          permission: permissionValue,
+        });
+      })
+      .catch(() => {
+        if (cancelled) {
+          return;
+        }
+        setDiagnostics({
+          scriptPresent,
+          oneSignalPresent,
+          deferredPresent,
+          deferredLength,
+          serviceWorkerSupported: true,
+          serviceWorkerRegistered: false,
+          serviceWorkerScript: null,
+          permission: permissionValue,
+        });
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [debugEnabled]);
 
   const handleEnable = async () => {
@@ -173,6 +251,8 @@ export default function SettingsClient({
       : status === "unsubscribed"
         ? "Inactive"
         : "Inconnu";
+  const isSupported = support.notifications && support.serviceWorker;
+  const isPermissionDenied = permission === "denied";
 
   return (
     <div className="space-y-6">
@@ -203,12 +283,36 @@ export default function SettingsClient({
           </p>
         ) : null}
 
+        {!isSupported ? (
+          <p className="text-sm text-[var(--muted)]">
+            Ton navigateur ne supporte pas les notifications push. Essaie un
+            navigateur compatible ou consulte{" "}
+            <a
+              className="underline"
+              href="https://documentation.onesignal.com/docs/web-push-quickstart"
+              target="_blank"
+              rel="noreferrer"
+            >
+              le guide de compatibilite
+            </a>
+            .
+          </p>
+        ) : null}
+
+        {isPermissionDenied ? (
+          <p className="text-sm text-[var(--muted)]">
+            Les notifications sont bloquees pour ce site. Dans ton navigateur,
+            ouvre les parametres du site et autorise les notifications, puis
+            recharge la page.
+          </p>
+        ) : null}
+
         <div className="flex flex-wrap gap-3">
           {status === "subscribed" ? (
             <Button
               variant="outline"
               onClick={handleDisable}
-              disabled={!isConfigured || loading}
+              disabled={!isConfigured || loading || !isSupported}
             >
               {loading ? "Desactivation..." : "Desactiver"}
             </Button>
@@ -216,7 +320,7 @@ export default function SettingsClient({
             <Button
               variant="primary"
               onClick={handleEnable}
-              disabled={!isConfigured || loading}
+              disabled={!isConfigured || loading || !isSupported}
             >
               {loading ? "Activation..." : "Activer"}
             </Button>
@@ -246,6 +350,17 @@ export default function SettingsClient({
               OneSignalDeferred:{" "}
               {diagnostics?.deferredPresent ? "yes" : "no"} (
               {diagnostics?.deferredLength ?? 0})
+            </div>
+            <div>
+              service worker:{" "}
+              {diagnostics?.serviceWorkerSupported
+                ? diagnostics?.serviceWorkerRegistered
+                  ? "registered"
+                  : "missing"
+                : "unsupported"}
+            </div>
+            <div>
+              worker script: {diagnostics?.serviceWorkerScript ?? "--"}
             </div>
             <div>
               notification permission: {diagnostics?.permission ?? "--"}
