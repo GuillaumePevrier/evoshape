@@ -25,8 +25,16 @@ const loadScript = () => {
   });
 };
 
+type OneSignalInitOptions = {
+  appId: string;
+  safari_web_id?: string;
+  notifyButton?: {
+    enable: boolean;
+  };
+};
+
 type OneSignalSDK = {
-  init?: (options: { appId: string }) => Promise<void> | void;
+  init?: (options: OneSignalInitOptions) => Promise<void> | void;
   Notifications?: {
     requestPermission?: () => Promise<void>;
     setSubscription?: (value: boolean) => Promise<void>;
@@ -58,16 +66,38 @@ const resolveAppId = (appIdOverride?: string) => {
   return process.env.NEXT_PUBLIC_ONESIGNAL_APP_ID ?? "";
 };
 
+const buildInitOptions = (options?: Partial<OneSignalInitOptions>) => {
+  const appId = resolveAppId(options?.appId);
+  const initOptions: OneSignalInitOptions = { appId };
+
+  if (options?.safari_web_id) {
+    initOptions.safari_web_id = options.safari_web_id;
+  }
+  if (options?.notifyButton) {
+    initOptions.notifyButton = options.notifyButton;
+  }
+
+  return initOptions;
+};
+
+let initializedAppId: string | null = null;
+
 export const initOneSignal = async (
-  appIdOverride?: string
+  options?: Partial<OneSignalInitOptions>
 ): Promise<InitResult> => {
-  const appId = resolveAppId(appIdOverride);
-  if (!appId) {
+  const initOptions = buildInitOptions(options);
+  if (!initOptions.appId) {
     return { ok: false, reason: "missing-app-id" };
   }
 
-  if (initialized) {
+  if (initialized && initializedAppId === initOptions.appId) {
     return { ok: true };
+  }
+
+  if (initializedAppId && initializedAppId !== initOptions.appId) {
+    initialized = false;
+    initPromise = null;
+    initializedAppId = null;
   }
 
   if (!initPromise) {
@@ -78,8 +108,9 @@ export const initOneSignal = async (
         if (!OneSignal?.init) {
           return { ok: false, reason: "sdk-unavailable" };
         }
-        await OneSignal.init({ appId });
+        await OneSignal.init(initOptions);
         initialized = true;
+        initializedAppId = initOptions.appId;
         return { ok: true };
       } catch {
         return { ok: false, reason: "sdk-load-failed" };
@@ -90,8 +121,8 @@ export const initOneSignal = async (
   return initPromise;
 };
 
-export const subscribeToPush = async (appIdOverride?: string) => {
-  const initResult = await initOneSignal(appIdOverride);
+export const subscribeToPush = async (options?: Partial<OneSignalInitOptions>) => {
+  const initResult = await initOneSignal(options);
   if (!initResult.ok) {
     return initResult;
   }
@@ -112,8 +143,10 @@ export const subscribeToPush = async (appIdOverride?: string) => {
   return { ok: true };
 };
 
-export const unsubscribeFromPush = async (appIdOverride?: string) => {
-  const initResult = await initOneSignal(appIdOverride);
+export const unsubscribeFromPush = async (
+  options?: Partial<OneSignalInitOptions>
+) => {
+  const initResult = await initOneSignal(options);
   if (!initResult.ok) {
     return initResult;
   }
@@ -132,8 +165,10 @@ export const unsubscribeFromPush = async (appIdOverride?: string) => {
   return { ok: true };
 };
 
-export const getSubscriptionId = async (appIdOverride?: string) => {
-  const initResult = await initOneSignal(appIdOverride);
+export const getSubscriptionId = async (
+  options?: Partial<OneSignalInitOptions>
+) => {
+  const initResult = await initOneSignal(options);
   if (!initResult.ok) {
     return null;
   }
@@ -154,8 +189,8 @@ export const getSubscriptionId = async (appIdOverride?: string) => {
   return null;
 };
 
-export const isPushEnabled = async (appIdOverride?: string) => {
-  const initResult = await initOneSignal(appIdOverride);
+export const isPushEnabled = async (options?: Partial<OneSignalInitOptions>) => {
+  const initResult = await initOneSignal(options);
   if (!initResult.ok) {
     return false;
   }

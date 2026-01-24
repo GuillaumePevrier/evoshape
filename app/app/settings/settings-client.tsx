@@ -16,9 +16,13 @@ type Status = "unknown" | "subscribed" | "unsubscribed";
 
 type SettingsClientProps = {
   appId: string;
+  safariWebId: string;
 };
 
-export default function SettingsClient({ appId }: SettingsClientProps) {
+export default function SettingsClient({
+  appId,
+  safariWebId,
+}: SettingsClientProps) {
   const isConfigured = Boolean(appId);
   const [status, setStatus] = useState<Status>(
     isConfigured ? "unsubscribed" : "unknown"
@@ -26,14 +30,23 @@ export default function SettingsClient({ appId }: SettingsClientProps) {
   const [message, setMessage] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
+  const initOptions = useCallback(
+    () => ({
+      appId,
+      safari_web_id: safariWebId || undefined,
+      notifyButton: { enable: true },
+    }),
+    [appId, safariWebId]
+  );
+
   const refreshStatus = useCallback(async () => {
     if (!isConfigured) {
       setStatus("unknown");
       return;
     }
-    const enabled = await isPushEnabled(appId);
+    const enabled = await isPushEnabled(initOptions());
     setStatus(enabled ? "subscribed" : "unsubscribed");
-  }, [appId, isConfigured]);
+  }, [initOptions, isConfigured]);
 
   useEffect(() => {
     if (!isConfigured) {
@@ -46,21 +59,25 @@ export default function SettingsClient({ appId }: SettingsClientProps) {
   const handleEnable = async () => {
     setLoading(true);
     setMessage(null);
-    const initResult = await initOneSignal(appId);
+    const initResult = await initOneSignal(initOptions());
     if (!initResult.ok) {
-      setMessage("OneSignal n'est pas configure.");
+      setMessage(
+        initResult.reason === "missing-app-id"
+          ? "OneSignal n'est pas configure."
+          : "Impossible de charger OneSignal."
+      );
       setLoading(false);
       return;
     }
 
-    const requestResult = await subscribeToPush(appId);
+    const requestResult = await subscribeToPush(initOptions());
     if (!requestResult.ok) {
       setMessage("Impossible d'activer les notifications.");
       setLoading(false);
       return;
     }
 
-    const subscriptionId = await getSubscriptionId(appId);
+    const subscriptionId = await getSubscriptionId(initOptions());
     if (!subscriptionId) {
       setMessage("Abonnement introuvable apres activation.");
       setLoading(false);
@@ -93,7 +110,7 @@ export default function SettingsClient({ appId }: SettingsClientProps) {
   const handleDisable = async () => {
     setLoading(true);
     setMessage(null);
-    const result = await unsubscribeFromPush();
+    const result = await unsubscribeFromPush(initOptions());
     if (!result.ok) {
       setMessage("Impossible de desactiver pour le moment.");
       setLoading(false);
