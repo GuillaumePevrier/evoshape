@@ -1,12 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import {
   getSubscriptionId,
-  hasOneSignalAppId,
   initOneSignal,
   isPushEnabled,
   subscribeToPush,
@@ -15,48 +14,53 @@ import {
 
 type Status = "unknown" | "subscribed" | "unsubscribed";
 
-export default function SettingsClient() {
+type SettingsClientProps = {
+  appId: string;
+};
+
+export default function SettingsClient({ appId }: SettingsClientProps) {
+  const isConfigured = Boolean(appId);
   const [status, setStatus] = useState<Status>(
-    hasOneSignalAppId ? "unsubscribed" : "unknown"
+    isConfigured ? "unsubscribed" : "unknown"
   );
   const [message, setMessage] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  const refreshStatus = async () => {
-    if (!hasOneSignalAppId) {
+  const refreshStatus = useCallback(async () => {
+    if (!isConfigured) {
       setStatus("unknown");
       return;
     }
-    const enabled = await isPushEnabled();
+    const enabled = await isPushEnabled(appId);
     setStatus(enabled ? "subscribed" : "unsubscribed");
-  };
+  }, [appId, isConfigured]);
 
   useEffect(() => {
-    if (!hasOneSignalAppId) {
+    if (!isConfigured) {
       return;
     }
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    refreshStatus();
-  }, []);
+    void refreshStatus();
+  }, [isConfigured, refreshStatus]);
 
   const handleEnable = async () => {
     setLoading(true);
     setMessage(null);
-    const initResult = await initOneSignal();
+    const initResult = await initOneSignal(appId);
     if (!initResult.ok) {
       setMessage("OneSignal n'est pas configure.");
       setLoading(false);
       return;
     }
 
-    const requestResult = await subscribeToPush();
+    const requestResult = await subscribeToPush(appId);
     if (!requestResult.ok) {
       setMessage("Impossible d'activer les notifications.");
       setLoading(false);
       return;
     }
 
-    const subscriptionId = await getSubscriptionId();
+    const subscriptionId = await getSubscriptionId(appId);
     if (!subscriptionId) {
       setMessage("Abonnement introuvable apres activation.");
       setLoading(false);
@@ -129,7 +133,7 @@ export default function SettingsClient() {
           </span>
         </div>
 
-        {!hasOneSignalAppId ? (
+        {!isConfigured ? (
           <p className="text-sm text-[var(--muted)]">
             OneSignal n&apos;est pas configure. Ajoute
             `NEXT_PUBLIC_ONESIGNAL_APP_ID` pour activer cette option.
@@ -141,7 +145,7 @@ export default function SettingsClient() {
             <Button
               variant="outline"
               onClick={handleDisable}
-              disabled={!hasOneSignalAppId || loading}
+              disabled={!isConfigured || loading}
             >
               {loading ? "Desactivation..." : "Desactiver"}
             </Button>
@@ -149,7 +153,7 @@ export default function SettingsClient() {
             <Button
               variant="primary"
               onClick={handleEnable}
-              disabled={!hasOneSignalAppId || loading}
+              disabled={!isConfigured || loading}
             >
               {loading ? "Activation..." : "Activer"}
             </Button>

@@ -51,12 +51,17 @@ const getOneSignal = (): OneSignalSDK | null => {
   );
 };
 
-export const hasOneSignalAppId = Boolean(
-  process.env.NEXT_PUBLIC_ONESIGNAL_APP_ID
-);
+const resolveAppId = (appIdOverride?: string) => {
+  if (appIdOverride) {
+    return appIdOverride;
+  }
+  return process.env.NEXT_PUBLIC_ONESIGNAL_APP_ID ?? "";
+};
 
-export const initOneSignal = async (): Promise<InitResult> => {
-  const appId = process.env.NEXT_PUBLIC_ONESIGNAL_APP_ID;
+export const initOneSignal = async (
+  appIdOverride?: string
+): Promise<InitResult> => {
+  const appId = resolveAppId(appIdOverride);
   if (!appId) {
     return { ok: false, reason: "missing-app-id" };
   }
@@ -85,8 +90,8 @@ export const initOneSignal = async (): Promise<InitResult> => {
   return initPromise;
 };
 
-export const subscribeToPush = async () => {
-  const initResult = await initOneSignal();
+export const subscribeToPush = async (appIdOverride?: string) => {
+  const initResult = await initOneSignal(appIdOverride);
   if (!initResult.ok) {
     return initResult;
   }
@@ -107,8 +112,8 @@ export const subscribeToPush = async () => {
   return { ok: true };
 };
 
-export const unsubscribeFromPush = async () => {
-  const initResult = await initOneSignal();
+export const unsubscribeFromPush = async (appIdOverride?: string) => {
+  const initResult = await initOneSignal(appIdOverride);
   if (!initResult.ok) {
     return initResult;
   }
@@ -127,8 +132,8 @@ export const unsubscribeFromPush = async () => {
   return { ok: true };
 };
 
-export const getSubscriptionId = async () => {
-  const initResult = await initOneSignal();
+export const getSubscriptionId = async (appIdOverride?: string) => {
+  const initResult = await initOneSignal(appIdOverride);
   if (!initResult.ok) {
     return null;
   }
@@ -149,8 +154,8 @@ export const getSubscriptionId = async () => {
   return null;
 };
 
-export const isPushEnabled = async () => {
-  const initResult = await initOneSignal();
+export const isPushEnabled = async (appIdOverride?: string) => {
+  const initResult = await initOneSignal(appIdOverride);
   if (!initResult.ok) {
     return false;
   }
