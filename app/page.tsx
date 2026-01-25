@@ -31,16 +31,16 @@ export default function Home() {
         </div>
       </header>
 
-      <section className="relative mx-auto flex w-full max-w-6xl flex-col gap-8 px-6 pb-12 pt-6 lg:min-h-[calc(100svh-96px)] lg:grid lg:grid-cols-[1fr_1.05fr] lg:items-start lg:gap-14">
-        <div className="order-first -mx-4 px-4 sm:mx-0 sm:px-0 lg:order-first">
+      <section className="relative mx-auto flex w-full max-w-6xl flex-col gap-6 px-6 pb-10 pt-4 lg:min-h-[calc(100svh-96px)] lg:grid lg:grid-cols-[0.95fr_1.05fr] lg:items-start lg:gap-10">
+        <div className="order-2 -mx-4 px-4 sm:mx-0 sm:px-0 lg:order-1 lg:pt-2">
           <HeroAvatar />
         </div>
 
-        <div className="flex flex-col gap-6 text-center lg:pt-6 lg:text-left">
+        <div className="order-1 flex flex-col gap-5 text-center lg:order-2 lg:text-left">
           <div className="inline-flex items-center gap-2 rounded-full bg-[var(--accent-soft)] px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-[var(--accent-strong)]">
             Phase 1: suivi regime
           </div>
-          <h1 className="text-3xl font-semibold tracking-tight text-[var(--foreground)] sm:text-4xl lg:text-[3.2rem]">
+          <h1 className="text-3xl font-semibold tracking-tight text-[var(--foreground)] sm:text-4xl lg:text-[3.05rem]">
             EvoShape te montre le mouvement, pas les chiffres froids.
           </h1>
           <p className="mx-auto max-w-xl text-sm text-[var(--muted)] sm:text-base lg:mx-0 lg:text-lg">
@@ -66,11 +66,11 @@ export default function Home() {
             <span>Activites</span>
             <span>Objectifs</span>
           </div>
-          <div className="mt-2 space-y-4 rounded-[26px] border border-white/70 bg-white/70 p-6 text-left shadow-[0_18px_40px_rgba(17,16,14,0.08)] backdrop-blur-md sm:p-7">
+          <div className="mt-1 space-y-3 rounded-[24px] border border-white/70 bg-white/70 p-5 text-left shadow-[0_18px_40px_rgba(17,16,14,0.08)] backdrop-blur-md sm:p-6">
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--muted)]">
               Ton cockpit
             </p>
-            <h2 className="text-xl font-semibold text-[var(--foreground)] sm:text-2xl">
+            <h2 className="text-lg font-semibold text-[var(--foreground)] sm:text-xl">
               Un resume clair, du matin au soir.
             </h2>
             <p className="text-sm text-[var(--muted)]">
