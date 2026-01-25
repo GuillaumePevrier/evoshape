@@ -12,13 +12,17 @@ export default function Home() {
         <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(255,255,255,0.7),transparent_60%)]" />
       </div>
 
-      <header className="relative mx-auto flex w-full max-w-6xl flex-wrap items-center justify-between gap-3 px-6 pt-4 sm:pt-6">
-        <Logo
-          size="lg"
-          className="gap-4"
-          labelClassName="text-2xl sm:text-3xl tracking-tight"
-        />
-        <div className="flex items-center gap-3">
+      <header className="relative mx-auto w-full max-w-6xl px-6 pt-4 sm:pt-6">
+        <div className="absolute left-6 top-3 z-10 sm:top-4">
+          <Logo
+            size="xl"
+            showLabel={false}
+            showBackground={false}
+            className="gap-0"
+            imageClassName="drop-shadow-[0_10px_22px_rgba(17,16,14,0.18)]"
+          />
+        </div>
+        <div className="flex items-center justify-end gap-3">
           <Link
             href="/auth"
             className="text-sm font-semibold text-[var(--muted)]"
