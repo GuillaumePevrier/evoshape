@@ -31,16 +31,16 @@ export default function Home() {
         </div>
       </header>
 
-      <section className="relative mx-auto flex w-full max-w-6xl flex-col gap-5 px-6 pb-8 pt-4 lg:min-h-[calc(100svh-88px)] lg:grid lg:grid-cols-[0.95fr_1.05fr] lg:items-start lg:gap-8 lg:pb-6 lg:pt-2">
-        <div className="order-2 -mx-4 px-4 sm:mx-0 sm:px-0 lg:order-1 lg:pt-1">
+      <section className="relative mx-auto flex w-full max-w-6xl flex-col gap-4 px-6 pb-6 pt-3 lg:min-h-[calc(100svh-80px)] lg:grid lg:grid-cols-[0.95fr_1.05fr] lg:items-start lg:gap-6 lg:pb-4 lg:pt-1">
+        <div className="order-2 -mx-4 px-4 sm:mx-0 sm:px-0 lg:order-1 lg:pt-0">
           <HeroAvatar />
         </div>
 
-        <div className="order-1 flex flex-col gap-4 text-center lg:order-2 lg:h-full lg:gap-5 lg:text-left">
+        <div className="order-1 flex flex-col gap-3 text-center lg:order-2 lg:h-full lg:gap-4 lg:text-left">
           <div className="inline-flex items-center gap-2 rounded-full bg-[var(--accent-soft)] px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-[var(--accent-strong)]">
             Phase 1: suivi regime
           </div>
-          <h1 className="text-3xl font-semibold tracking-tight text-[var(--foreground)] sm:text-4xl lg:text-[2.85rem]">
+          <h1 className="text-3xl font-semibold tracking-tight text-[var(--foreground)] sm:text-4xl lg:text-[2.7rem]">
             EvoShape te montre le mouvement, pas les chiffres froids.
           </h1>
           <p className="mx-auto max-w-xl text-sm text-[var(--muted)] sm:text-base lg:mx-0 lg:text-base">
@@ -54,7 +54,7 @@ export default function Home() {
             <span>Objectifs</span>
           </div>
           <div className="hidden space-y-3 text-left sm:block lg:mt-auto">
-            <div className="space-y-3 rounded-[22px] border border-white/70 bg-white/70 p-5 shadow-[0_18px_40px_rgba(17,16,14,0.08)] backdrop-blur-md">
+            <div className="space-y-3 rounded-[22px] border border-white/70 bg-white/70 p-4 shadow-[0_18px_40px_rgba(17,16,14,0.08)] backdrop-blur-md">
               <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--muted)]">
                 Ton cockpit
               </p>
