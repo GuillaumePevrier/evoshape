@@ -36,12 +36,12 @@ export default function Home() {
           <HeroAvatar />
         </div>
 
-        <div className="order-1 flex flex-col gap-2 text-center lg:order-2 lg:h-full lg:gap-3 lg:text-left">
+        <div className="order-1 flex flex-col gap-2 text-center lg:order-2 lg:h-full lg:gap-2 lg:text-left">
           <div className="inline-flex items-center gap-2 rounded-full bg-[var(--accent-soft)] px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-[var(--accent-strong)]">
             Phase 1: suivi regime
           </div>
-          <h1 className="text-3xl font-semibold tracking-tight text-[var(--foreground)] sm:text-4xl lg:text-[2.55rem]">
-            EvoShape te montre le mouvement, pas les chiffres froids.
+          <h1 className="text-3xl font-semibold tracking-tight text-[var(--foreground)] sm:text-4xl lg:text-[2.45rem]">
+            EvoShape rend la progression claire.
           </h1>
           <p className="mx-auto max-w-md text-sm text-[var(--muted)] sm:hidden">
             Ajuste ton poids cible et suis repas + energie en un clin
@@ -57,7 +57,7 @@ export default function Home() {
             <span>Activites</span>
             <span>Objectifs</span>
           </div>
-          <div className="hidden space-y-3 text-left sm:block lg:mt-auto">
+          <div className="hidden space-y-3 text-left sm:block">
             <div className="space-y-3 rounded-[22px] border border-white/70 bg-white/70 p-4 shadow-[0_18px_40px_rgba(17,16,14,0.08)] backdrop-blur-md">
               <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--muted)]">
                 Ton cockpit
