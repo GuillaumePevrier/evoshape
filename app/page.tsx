@@ -31,30 +31,30 @@ export default function Home() {
         </div>
       </header>
 
-      <section className="relative mx-auto flex w-full max-w-6xl flex-col gap-6 px-6 pb-10 pt-4 lg:min-h-[calc(100svh-96px)] lg:grid lg:grid-cols-[0.95fr_1.05fr] lg:items-start lg:gap-10">
-        <div className="order-2 -mx-4 px-4 sm:mx-0 sm:px-0 lg:order-1 lg:pt-2">
+      <section className="relative mx-auto flex w-full max-w-6xl flex-col gap-5 px-6 pb-8 pt-4 lg:min-h-[calc(100svh-88px)] lg:grid lg:grid-cols-[0.95fr_1.05fr] lg:items-start lg:gap-8 lg:pb-6 lg:pt-2">
+        <div className="order-2 -mx-4 px-4 sm:mx-0 sm:px-0 lg:order-1 lg:pt-1">
           <HeroAvatar />
         </div>
 
-        <div className="order-1 flex flex-col gap-5 text-center lg:order-2 lg:text-left">
+        <div className="order-1 flex flex-col gap-4 text-center lg:order-2 lg:h-full lg:gap-5 lg:text-left">
           <div className="inline-flex items-center gap-2 rounded-full bg-[var(--accent-soft)] px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-[var(--accent-strong)]">
             Phase 1: suivi regime
           </div>
-          <h1 className="text-3xl font-semibold tracking-tight text-[var(--foreground)] sm:text-4xl lg:text-[3.05rem]">
+          <h1 className="text-3xl font-semibold tracking-tight text-[var(--foreground)] sm:text-4xl lg:text-[2.85rem]">
             EvoShape te montre le mouvement, pas les chiffres froids.
           </h1>
-          <p className="mx-auto max-w-xl text-sm text-[var(--muted)] sm:text-base lg:mx-0 lg:text-lg">
+          <p className="mx-auto max-w-xl text-sm text-[var(--muted)] sm:text-base lg:mx-0 lg:text-base">
             Ajuste ton poids cible, garde un oeil sur tes repas et ton energie.
             Tout est pense pour rester motive avec un suivi simple et visuel.
           </p>
           <div className="flex flex-wrap items-center justify-center gap-3 lg:justify-start">
-            <Button href="/auth" size="md" className="w-full sm:w-auto">
+            <Button href="/auth" size="sm" className="w-full sm:w-auto">
               Se connecter
             </Button>
             <Button
               href="/auth"
               variant="outline"
-              size="md"
+              size="sm"
               className="w-full sm:w-auto"
             >
               Creer un compte
@@ -66,70 +66,67 @@ export default function Home() {
             <span>Activites</span>
             <span>Objectifs</span>
           </div>
-          <div className="mt-1 space-y-3 rounded-[24px] border border-white/70 bg-white/70 p-5 text-left shadow-[0_18px_40px_rgba(17,16,14,0.08)] backdrop-blur-md sm:p-6">
-            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--muted)]">
-              Ton cockpit
-            </p>
-            <h2 className="text-lg font-semibold text-[var(--foreground)] sm:text-xl">
-              Un resume clair, du matin au soir.
-            </h2>
-            <p className="text-sm text-[var(--muted)]">
-              Visualise les calories, la balance du jour et la direction de ta
-              semaine. Rien de plus, rien de moins.
-            </p>
-            <div className="grid gap-4 text-sm font-semibold text-[var(--foreground)] sm:grid-cols-3">
+          <div className="hidden space-y-3 text-left sm:block lg:mt-auto">
+            <div className="space-y-3 rounded-[22px] border border-white/70 bg-white/70 p-5 shadow-[0_18px_40px_rgba(17,16,14,0.08)] backdrop-blur-md">
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--muted)]">
+                Ton cockpit
+              </p>
+              <h2 className="text-base font-semibold text-[var(--foreground)] sm:text-lg">
+                Un resume clair, du matin au soir.
+              </h2>
+              <div className="grid gap-3 text-sm font-semibold text-[var(--foreground)] sm:grid-cols-3">
+                {[
+                  { label: "Kcal nettes", value: "1 620" },
+                  { label: "Activites", value: "2 / jour" },
+                  { label: "Variation 7j", value: "-0,6 kg" },
+                ].map((item, index) => (
+                  <div
+                    key={item.label}
+                    className={`space-y-1 ${
+                      index === 0
+                        ? ""
+                        : "border-t border-white/70 pt-2 sm:border-t-0 sm:border-l sm:pl-3 sm:pt-0"
+                    }`}
+                  >
+                    <p className="text-xs font-medium text-[var(--muted)]">
+                      {item.label}
+                    </p>
+                    <p className="text-sm">{item.value}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className="hidden grid-cols-3 gap-3 text-left text-xs xl:grid">
               {[
-                { label: "Kcal nettes", value: "1 620" },
-                { label: "Activites", value: "2 / jour" },
-                { label: "Variation 7j", value: "-0,6 kg" },
-              ].map((item, index) => (
+                {
+                  title: "Profil ultra simple",
+                  description:
+                    "Fixe tes objectifs et garde un profil propre en une minute.",
+                },
+                {
+                  title: "Journal express",
+                  description:
+                    "Templates repas + ajout rapide pour ne jamais perdre le fil.",
+                },
+                {
+                  title: "Progression motivee",
+                  description:
+                    "Des tendances claires pour rester engage chaque semaine.",
+                },
+              ].map((item) => (
                 <div
-                  key={item.label}
-                  className={`space-y-1 ${
-                    index === 0
-                      ? ""
-                      : "border-t border-white/70 pt-3 sm:border-t-0 sm:border-l sm:pl-4 sm:pt-0"
-                  }`}
+                  key={item.title}
+                  className="space-y-2 rounded-[20px] border border-[var(--border)] bg-white/50 p-4 shadow-[0_14px_32px_rgba(17,16,14,0.06)]"
                 >
-                  <p className="text-xs font-medium text-[var(--muted)]">
-                    {item.label}
+                  <h3 className="text-xs font-semibold text-[var(--foreground)]">
+                    {item.title}
+                  </h3>
+                  <p className="text-xs text-[var(--muted)]">
+                    {item.description}
                   </p>
-                  <p className="text-base">{item.value}</p>
                 </div>
               ))}
             </div>
-          </div>
-
-          <div className="hidden grid-cols-3 gap-3 text-left text-sm sm:grid">
-            {[
-              {
-                title: "Profil ultra simple",
-                description:
-                  "Fixe tes objectifs et garde un profil propre en une minute.",
-              },
-              {
-                title: "Journal express",
-                description:
-                  "Templates repas + ajout rapide pour ne jamais perdre le fil.",
-              },
-              {
-                title: "Progression motivee",
-                description:
-                  "Des tendances claires pour rester engage chaque semaine.",
-              },
-            ].map((item) => (
-              <div
-                key={item.title}
-                className="space-y-2 rounded-[22px] border border-[var(--border)] bg-white/50 p-4 shadow-[0_14px_32px_rgba(17,16,14,0.06)]"
-              >
-                <h3 className="text-sm font-semibold text-[var(--foreground)]">
-                  {item.title}
-                </h3>
-                <p className="text-xs text-[var(--muted)]">
-                  {item.description}
-                </p>
-              </div>
-            ))}
           </div>
         </div>
       </section>

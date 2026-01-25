@@ -2,7 +2,7 @@ import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Sparkline } from "@/components/ui/sparkline";
-import { getISODate } from "@/lib/date";
+import { formatShortDate, getISODate } from "@/lib/date";
 import { calculateDelta7Days } from "@/lib/metrics";
 
 type MealLog = {
@@ -88,34 +88,40 @@ export default function DashboardClient({
   const weeklyNet = netSeries.reduce((sum, value) => sum + value, 0);
   const averageNet = weeklyNet / 7;
 
-  const weightByDate = weights.reduce<Record<string, number>>((acc, item) => {
-    const value = Number(item.weight_kg);
-    if (!Number.isNaN(value)) {
-      acc[item.recorded_at] = value;
-    }
-    return acc;
-  }, {});
+  const normalizedWeights = [...weights]
+    .map((entry) => ({
+      recorded_at: entry.recorded_at,
+      weight_kg: Number(entry.weight_kg),
+    }))
+    .filter((entry) => Number.isFinite(entry.weight_kg))
+    .sort(
+      (a, b) =>
+        new Date(a.recorded_at).getTime() - new Date(b.recorded_at).getTime()
+    );
 
-  let lastWeight: number | null = null;
-  const weightSeries = lastSevenDays.map((date) => {
-    const value = weightByDate[date];
-    if (value !== undefined) {
-      lastWeight = value;
-    }
-    return lastWeight ?? 0;
-  });
-
-  const weekWeights = weights
-    .filter((entry) => lastSevenDays.includes(entry.recorded_at))
-    .map((entry) => Number(entry.weight_kg))
-    .filter((value) => Number.isFinite(value));
+  const recentWeights = normalizedWeights.slice(-7);
+  const weightSeries = recentWeights.map((entry) => entry.weight_kg);
   const averageWeight =
-    weekWeights.length > 0
-      ? weekWeights.reduce((sum, value) => sum + value, 0) / weekWeights.length
+    recentWeights.length > 0
+      ? recentWeights.reduce((sum, entry) => sum + entry.weight_kg, 0) /
+        recentWeights.length
       : null;
 
-  const hasWeightSeries = weightSeries.some((value) => value > 0);
-  const hasNetSeries = netSeries.some((value) => value !== 0);
+  const hasWeightSeries = recentWeights.length > 0;
+  const hasNetSeries = meals.length > 0 || activities.length > 0;
+  const weightMin = hasWeightSeries ? Math.min(...weightSeries) : null;
+  const weightMax = hasWeightSeries ? Math.max(...weightSeries) : null;
+  const weightRangeLabel =
+    recentWeights.length > 1
+      ? `${formatShortDate(recentWeights[0].recorded_at)} - ${formatShortDate(
+          recentWeights[recentWeights.length - 1].recorded_at
+        )}`
+      : recentWeights.length === 1
+        ? formatShortDate(recentWeights[0].recorded_at)
+        : null;
+
+  const netMin = hasNetSeries ? Math.min(...netSeries) : null;
+  const netMax = hasNetSeries ? Math.max(...netSeries) : null;
 
   return (
     <div className="space-y-6">
@@ -223,7 +229,7 @@ export default function DashboardClient({
               {averageWeight ? `${averageWeight.toFixed(1)} kg` : "--"}
             </p>
             <p className="text-xs text-[var(--muted)]">
-              Basé sur les 7 derniers jours.
+              Basé sur les 7 dernieres mesures.
             </p>
           </div>
         </div>
@@ -231,11 +237,28 @@ export default function DashboardClient({
 
       <div className="grid gap-4 lg:grid-cols-2">
         <Card className="space-y-3">
-          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--muted)]">
-            Poids 7 jours
-          </p>
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--muted)]">
+                Poids (7 dernieres mesures)
+              </p>
+              {weightRangeLabel ? (
+                <p className="text-xs text-[var(--muted)]">{weightRangeLabel}</p>
+              ) : null}
+            </div>
+            {hasWeightSeries ? (
+              <p className="text-xs font-semibold text-[var(--foreground)]">
+                {weightMin?.toFixed(1)} - {weightMax?.toFixed(1)} kg
+              </p>
+            ) : null}
+          </div>
           {hasWeightSeries ? (
-            <Sparkline values={weightSeries} />
+            <Sparkline
+              values={weightSeries}
+              id="weight"
+              height={96}
+              className="text-[var(--accent)]"
+            />
           ) : (
             <p className="text-sm text-[var(--muted)]">
               Ajoute des mesures pour voir la courbe.
@@ -243,11 +266,29 @@ export default function DashboardClient({
           )}
         </Card>
         <Card className="space-y-3" variant="outline">
-          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--muted)]">
-            Calories nettes 7 jours
-          </p>
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--muted)]">
+                Calories nettes (7 jours)
+              </p>
+              <p className="text-xs text-[var(--muted)]">
+                {formatShortDate(lastSevenDays[0])} -{" "}
+                {formatShortDate(lastSevenDays[lastSevenDays.length - 1])}
+              </p>
+            </div>
+            {hasNetSeries ? (
+              <p className="text-xs font-semibold text-[var(--foreground)]">
+                {netMin?.toFixed(0)} - {netMax?.toFixed(0)} kcal
+              </p>
+            ) : null}
+          </div>
           {hasNetSeries ? (
-            <Sparkline values={netSeries} />
+            <Sparkline
+              values={netSeries}
+              id="net"
+              height={96}
+              className="text-[#F2A75A]"
+            />
           ) : (
             <p className="text-sm text-[var(--muted)]">
               Ajoute des repas pour alimenter le suivi.

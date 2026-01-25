@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Sparkline } from "@/components/ui/sparkline";
 import { createSupabaseBrowserClient } from "@/src/lib/supabase/client";
 import { formatShortDate, getISODate } from "@/lib/date";
 import { calculateDelta7Days } from "@/lib/metrics";
@@ -53,6 +54,32 @@ export default function WeightClient({
   const pendingDeletesRef = useRef(pendingDeletes);
 
   const delta7 = useMemo(() => calculateDelta7Days(entries), [entries]);
+  const trendData = useMemo(() => {
+    const normalized = [...entries]
+      .map((entry) => ({
+        recorded_at: entry.recorded_at,
+        weight_kg: Number(entry.weight_kg),
+      }))
+      .filter((entry) => Number.isFinite(entry.weight_kg))
+      .sort(
+        (a, b) =>
+          new Date(a.recorded_at).getTime() -
+          new Date(b.recorded_at).getTime()
+      );
+    const recent = normalized.slice(-14);
+    const series = recent.map((entry) => entry.weight_kg);
+    const min = series.length > 0 ? Math.min(...series) : null;
+    const max = series.length > 0 ? Math.max(...series) : null;
+    const rangeLabel =
+      recent.length > 1
+        ? `${formatShortDate(recent[0].recorded_at)} - ${formatShortDate(
+            recent[recent.length - 1].recorded_at
+          )}`
+        : recent.length === 1
+          ? formatShortDate(recent[0].recorded_at)
+          : null;
+    return { series, min, max, rangeLabel };
+  }, [entries]);
   const weightValue = Number(weight);
   const weightError =
     weight &&
@@ -354,6 +381,38 @@ export default function WeightClient({
           </p>
         </Card>
       </div>
+
+      <Card className="space-y-3">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--muted)]">
+              Evolution recente
+            </p>
+            {trendData.rangeLabel ? (
+              <p className="text-xs text-[var(--muted)]">
+                {trendData.rangeLabel}
+              </p>
+            ) : null}
+          </div>
+          {trendData.min !== null && trendData.max !== null ? (
+            <p className="text-xs font-semibold text-[var(--foreground)]">
+              {trendData.min.toFixed(1)} - {trendData.max.toFixed(1)} kg
+            </p>
+          ) : null}
+        </div>
+        {trendData.series.length > 0 ? (
+          <Sparkline
+            values={trendData.series}
+            id="weight-trend"
+            height={96}
+            className="text-[var(--accent)]"
+          />
+        ) : (
+          <p className="text-sm text-[var(--muted)]">
+            Ajoute plusieurs mesures pour afficher la courbe.
+          </p>
+        )}
+      </Card>
 
       <Card className="space-y-4">
         <h2 className="text-lg font-semibold text-[var(--foreground)]">
