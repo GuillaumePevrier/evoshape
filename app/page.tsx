@@ -36,7 +36,7 @@ export default function Home() {
           <HeroAvatar />
         </div>
 
-        <div className="order-1 flex flex-col gap-2 text-center lg:order-2 lg:h-full lg:justify-between lg:text-left">
+        <div className="order-1 flex flex-col gap-2 text-center lg:order-2 lg:h-full lg:gap-4 lg:justify-start lg:text-left">
           <div className="space-y-2 lg:space-y-3">
             <div className="inline-flex items-center gap-2 rounded-full bg-[var(--accent-soft)] px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-[var(--accent-strong)]">
               Phase 1: suivi regime
@@ -59,7 +59,7 @@ export default function Home() {
               <span>Objectifs</span>
             </div>
           </div>
-          <div className="hidden space-y-3 text-left sm:block">
+          <div className="hidden space-y-3 text-left sm:block lg:mt-4">
             <div className="space-y-3 rounded-[22px] border border-white/70 bg-white/70 p-4 shadow-[0_18px_40px_rgba(17,16,14,0.08)] backdrop-blur-md">
               <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--muted)]">
                 Ton cockpit
