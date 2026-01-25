@@ -31,51 +31,46 @@ export default function Home() {
         </div>
       </header>
 
-      <section className="relative mx-auto grid w-full max-w-6xl gap-10 px-6 pb-16 pt-10 lg:grid-cols-[1.05fr_0.95fr] lg:items-start lg:gap-16">
-        <div className="space-y-7 text-center lg:pr-6 lg:text-left">
+      <section className="relative mx-auto flex w-full max-w-6xl flex-col gap-8 px-6 pb-12 pt-6 lg:min-h-[calc(100svh-96px)] lg:grid lg:grid-cols-[1fr_1.05fr] lg:items-start lg:gap-14">
+        <div className="order-first -mx-4 px-4 sm:mx-0 sm:px-0 lg:order-first">
+          <HeroAvatar />
+        </div>
+
+        <div className="flex flex-col gap-6 text-center lg:pt-6 lg:text-left">
           <div className="inline-flex items-center gap-2 rounded-full bg-[var(--accent-soft)] px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-[var(--accent-strong)]">
             Phase 1: suivi regime
           </div>
-          <h1 className="text-4xl font-semibold tracking-tight text-[var(--foreground)] sm:text-5xl lg:text-[3.35rem]">
+          <h1 className="text-3xl font-semibold tracking-tight text-[var(--foreground)] sm:text-4xl lg:text-[3.2rem]">
             EvoShape te montre le mouvement, pas les chiffres froids.
           </h1>
-          <p className="max-w-xl text-base text-[var(--muted)] sm:text-lg">
+          <p className="mx-auto max-w-xl text-sm text-[var(--muted)] sm:text-base lg:mx-0 lg:text-lg">
             Ajuste ton poids cible, garde un oeil sur tes repas et ton energie.
             Tout est pense pour rester motive avec un suivi simple et visuel.
           </p>
-          <div className="flex flex-wrap items-center justify-center gap-4 lg:justify-start">
-            <Button href="/auth" size="lg" className="w-full sm:w-auto">
+          <div className="flex flex-wrap items-center justify-center gap-3 lg:justify-start">
+            <Button href="/auth" size="md" className="w-full sm:w-auto">
               Se connecter
             </Button>
             <Button
               href="/auth"
               variant="outline"
-              size="lg"
+              size="md"
               className="w-full sm:w-auto"
             >
               Creer un compte
             </Button>
           </div>
-          <div className="flex flex-wrap justify-center gap-4 text-xs font-semibold uppercase tracking-[0.2em] text-[var(--muted)] lg:justify-start">
+          <div className="hidden flex-wrap justify-center gap-4 text-xs font-semibold uppercase tracking-[0.2em] text-[var(--muted)] sm:flex lg:justify-start">
             <span>Poids</span>
             <span>Repas</span>
             <span>Activites</span>
             <span>Objectifs</span>
           </div>
-        </div>
-
-        <div className="order-first -mx-4 px-4 sm:mx-0 sm:px-0 lg:order-last">
-          <HeroAvatar />
-        </div>
-      </section>
-
-      <section className="relative mx-auto w-full max-w-6xl px-6 pb-20">
-        <div className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
-          <div className="space-y-4 rounded-[28px] border border-white/70 bg-white/70 p-8 shadow-[0_24px_60px_rgba(17,16,14,0.08)] backdrop-blur-md">
+          <div className="mt-2 space-y-4 rounded-[26px] border border-white/70 bg-white/70 p-6 text-left shadow-[0_18px_40px_rgba(17,16,14,0.08)] backdrop-blur-md sm:p-7">
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--muted)]">
               Ton cockpit
             </p>
-            <h2 className="text-2xl font-semibold text-[var(--foreground)]">
+            <h2 className="text-xl font-semibold text-[var(--foreground)] sm:text-2xl">
               Un resume clair, du matin au soir.
             </h2>
             <p className="text-sm text-[var(--muted)]">
@@ -105,7 +100,7 @@ export default function Home() {
             </div>
           </div>
 
-          <div className="grid gap-4">
+          <div className="hidden grid-cols-3 gap-3 text-left text-sm sm:grid">
             {[
               {
                 title: "Profil ultra simple",
@@ -125,12 +120,12 @@ export default function Home() {
             ].map((item) => (
               <div
                 key={item.title}
-                className="space-y-2 rounded-[24px] border border-[var(--border)] bg-white/50 p-6 shadow-[0_16px_40px_rgba(17,16,14,0.06)]"
+                className="space-y-2 rounded-[22px] border border-[var(--border)] bg-white/50 p-4 shadow-[0_14px_32px_rgba(17,16,14,0.06)]"
               >
-                <h3 className="text-base font-semibold text-[var(--foreground)]">
+                <h3 className="text-sm font-semibold text-[var(--foreground)]">
                   {item.title}
                 </h3>
-                <p className="text-sm text-[var(--muted)]">
+                <p className="text-xs text-[var(--muted)]">
                   {item.description}
                 </p>
               </div>

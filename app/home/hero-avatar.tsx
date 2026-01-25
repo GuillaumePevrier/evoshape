@@ -22,7 +22,7 @@ type HeroAvatarProps = {
 };
 
 export function HeroAvatar({ className }: HeroAvatarProps) {
-  const [weight, setWeight] = useState(85);
+  const [weight, setWeight] = useState(100);
   const [autoPlay, setAutoPlay] = useState(false);
   const [isBouncing, setIsBouncing] = useState(false);
   const [snapEnabled, setSnapEnabled] = useState(false);
@@ -178,7 +178,7 @@ export function HeroAvatar({ className }: HeroAvatarProps) {
   const parallaxY = pointerOffset.y * 14 + scrollOffset;
 
   return (
-    <div className={cn("relative space-y-6", className)}>
+    <div className={cn("relative space-y-5", className)}>
       <div className="pointer-events-none absolute -top-12 left-1/2 h-40 w-40 -translate-x-1/2 rounded-full bg-[radial-gradient(circle_at_center,rgba(12,141,133,0.35),transparent_70%)] blur-2xl" />
 
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -192,7 +192,7 @@ export function HeroAvatar({ className }: HeroAvatarProps) {
 
       <div
         ref={avatarRef}
-        className="relative mx-auto w-full max-w-[360px] sm:max-w-[440px] lg:max-w-[500px]"
+        className="relative mx-auto w-full max-w-[320px] sm:max-w-[420px] lg:max-w-[480px]"
       >
         <div className="pointer-events-none absolute -inset-8 rounded-[40px] bg-[radial-gradient(circle_at_center,rgba(12,141,133,0.18),transparent_70%)] blur-2xl" />
         <div
@@ -292,7 +292,7 @@ export function HeroAvatar({ className }: HeroAvatarProps) {
             </Button>
           </div>
         </div>
-        <div className="flex flex-wrap items-center gap-3 text-xs text-[var(--muted)]">
+        <div className="hidden flex-wrap items-center gap-3 text-xs text-[var(--muted)] sm:flex">
           <span>Vitesse auto-play</span>
           <input
             type="range"
