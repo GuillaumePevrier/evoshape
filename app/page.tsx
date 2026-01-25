@@ -47,19 +47,6 @@ export default function Home() {
             Ajuste ton poids cible, garde un oeil sur tes repas et ton energie.
             Tout est pense pour rester motive avec un suivi simple et visuel.
           </p>
-          <div className="flex flex-wrap items-center justify-center gap-3 lg:justify-start">
-            <Button href="/auth" size="sm" className="w-full sm:w-auto">
-              Se connecter
-            </Button>
-            <Button
-              href="/auth"
-              variant="outline"
-              size="sm"
-              className="w-full sm:w-auto"
-            >
-              Creer un compte
-            </Button>
-          </div>
           <div className="hidden flex-wrap justify-center gap-4 text-xs font-semibold uppercase tracking-[0.2em] text-[var(--muted)] sm:flex lg:justify-start">
             <span>Poids</span>
             <span>Repas</span>
