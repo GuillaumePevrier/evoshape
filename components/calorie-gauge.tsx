@@ -24,14 +24,14 @@ export function CalorieGauge({ net, target }: CalorieGaugeProps) {
             style={{ height: `${(overflow * 100).toFixed(0)}%` }}
           />
         ) : null}
-        <div className="relative h-full w-full overflow-hidden rounded-[32px] border border-[var(--border)] bg-[var(--surface-strong)]">
+        <div className="relative flex h-full w-full flex-col justify-end overflow-hidden rounded-[32px] border border-[var(--border)] bg-[var(--surface-strong)]">
           <div className="absolute left-2 right-2 top-4 h-[2px] rounded-full bg-[var(--accent-strong)]/60" />
           <span className="absolute -right-10 top-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--muted)]">
             Objectif
           </span>
           <div
             className={cn(
-              "w-full rounded-[28px] bg-gradient-to-t from-[var(--accent-strong)] via-[var(--accent)] to-emerald-300 transition-all duration-300"
+              "absolute bottom-0 left-0 right-0 rounded-[28px] bg-gradient-to-t from-[var(--accent-strong)] via-[var(--accent)] to-emerald-300 transition-all duration-300"
             )}
             style={{ height: `${(progress * 100).toFixed(0)}%` }}
           />

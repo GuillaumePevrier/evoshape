@@ -9,9 +9,16 @@ type NavLinkProps = {
   label: string;
   secondary?: string;
   badgeCount?: number;
+  onClick?: () => void;
 };
 
-export function AppNavLink({ href, label, secondary, badgeCount }: NavLinkProps) {
+export function AppNavLink({
+  href,
+  label,
+  secondary,
+  badgeCount,
+  onClick,
+}: NavLinkProps) {
   const pathname = usePathname();
   const isActive = pathname === href;
   const showBadge = typeof badgeCount === "number" && badgeCount > 0;
@@ -19,6 +26,7 @@ export function AppNavLink({ href, label, secondary, badgeCount }: NavLinkProps)
   return (
     <Link
       href={href}
+      onClick={onClick}
       className={cn(
         "group flex items-center justify-between rounded-2xl border border-transparent px-4 py-3 text-sm font-medium transition",
         isActive
