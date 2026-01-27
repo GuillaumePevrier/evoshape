@@ -3,7 +3,7 @@ import { cn } from "@/lib/cn";
 
 type LogoProps = {
   className?: string;
-  size?: "sm" | "md" | "lg" | "xl";
+  size?: "sm" | "md" | "lg" | "xl" | "2xl";
   labelClassName?: string;
   showLabel?: boolean;
   showBackground?: boolean;
@@ -16,6 +16,7 @@ const sizeMap = {
   md: "h-10 w-10",
   lg: "h-14 w-14",
   xl: "h-24 w-24",
+  "2xl": "h-40 w-40",
 };
 
 export function Logo({

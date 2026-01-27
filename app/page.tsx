@@ -1,5 +1,5 @@
 import { Logo } from "@/components/logo";
-import { Button } from "@/components/ui/button";
+import { HomeAuthCta } from "@/components/home-auth-cta";
 
 export default function Home() {
   return (
@@ -9,21 +9,18 @@ export default function Home() {
         <div className="absolute -bottom-40 left-[-140px] h-[420px] w-[420px] rounded-full bg-[radial-gradient(circle_at_center,rgba(255,200,120,0.3),transparent_70%)] blur-3xl" />
       </div>
 
-      <div className="relative mx-auto flex min-h-screen w-full max-w-md flex-col items-center justify-center gap-5 px-6 py-16 text-center">
-        <Logo size="xl" showBackground={false} />
-        <div className="space-y-3">
-          <h1 className="text-3xl font-semibold tracking-tight text-[var(--foreground)]">
-            EvoShape, le suivi clair au quotidien.
-          </h1>
-          <p className="text-sm text-[var(--muted)]">
-            Garde le cap sur tes objectifs avec un journal simple et une jauge
-            lisible.
-          </p>
-        </div>
-        <Button href="/auth" size="lg" className="w-full">
-          Se connecter / Creer un compte
-        </Button>
-        <p className="text-xs text-[var(--muted)]">Connexion ou creation en 30 secondes.</p>
+      <div className="relative mx-auto flex min-h-screen w-full max-w-md flex-col items-center justify-center gap-6 px-6 py-16 text-center">
+        <Logo
+          size="2xl"
+          showBackground={false}
+          showLabel={false}
+          className="flex-col"
+          imageClassName="drop-shadow-[0_20px_40px_rgba(17,16,14,0.2)]"
+        />
+        <p className="text-sm text-[var(--muted)]">
+          Ton suivi, clair et simple. Connecte-toi pour continuer.
+        </p>
+        <HomeAuthCta />
       </div>
     </main>
   );
