@@ -60,7 +60,7 @@ type CalorieGaugeClientProps = {
 type SheetView = "menu" | "meal" | "activity" | "weight" | "reports";
 
 type WheelAction = {
-  id: SheetView | "profile" | "notifications";
+  id: SheetView | "profile" | "notifications" | "settings";
   label: string;
   helper?: string;
   type: "sheet" | "route";
@@ -88,6 +88,13 @@ const wheelActions: WheelAction[] = [
   { id: "weight", label: "Ajouter poids", helper: "Poids du jour", type: "sheet" },
   { id: "reports", label: "Rapports", helper: "7 & 30 jours", type: "sheet" },
   { id: "profile", label: "Profil", helper: "Objectifs & profil", type: "route", href: "/app/profile" },
+  {
+    id: "settings",
+    label: "Parametres",
+    helper: "Preferences",
+    type: "route",
+    href: "/app/settings",
+  },
   {
     id: "notifications",
     label: "Notifications",
@@ -173,6 +180,7 @@ export default function CalorieGaugeClient({
   const [sheetOffset, setSheetOffset] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
   const [reportRange, setReportRange] = useState<"7" | "30">("7");
+  const [viewMode, setViewMode] = useState<"today" | "summary" | "focus">("today");
 
   const dragStart = useRef<number | null>(null);
 
@@ -215,6 +223,10 @@ export default function CalorieGaugeClient({
     day: "numeric",
     month: "short",
   }).format(new Date());
+
+  const showGauge = viewMode !== "summary";
+  const showStats = viewMode === "today";
+  const showWeightEquivalent = viewMode !== "focus";
 
   const reportSeries = reportRange === "7" ? netSeries7 : netSeries30;
   const reportStats = useMemo(() => {
@@ -604,16 +616,8 @@ export default function CalorieGaugeClient({
                 </div>
               </div>
 
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-end">
                 <LogoutButton />
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => router.push("/app/settings")}
-                >
-                  Parametres
-                </Button>
               </div>
             </div>
           </div>
@@ -815,7 +819,7 @@ export default function CalorieGaugeClient({
           </p>
           <p className="mt-1 text-sm text-[var(--muted)]">{todayLabel}</p>
         </div>
-        <div className="text-right">
+        <div className="flex flex-col items-end gap-2 text-right">
           <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--muted)]">
             Objectif ajuste
           </p>
@@ -823,13 +827,36 @@ export default function CalorieGaugeClient({
             {targetData.adjustedTarget.toFixed(0)} kcal
           </p>
           <p className="text-[10px] text-[var(--muted)]">avec le sport</p>
+          <div className="flex rounded-full border border-[var(--border)] bg-white/70 p-1 text-[11px] font-semibold">
+            {[
+              { id: "today", label: "Jour" },
+              { id: "summary", label: "Resume" },
+              { id: "focus", label: "Focus" },
+            ].map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                className={cn(
+                  "rounded-full px-3 py-1 transition",
+                  viewMode === item.id
+                    ? "bg-[var(--accent)] text-white"
+                    : "text-[var(--muted)]"
+                )}
+                onClick={() =>
+                  setViewMode(item.id as "today" | "summary" | "focus")
+                }
+              >
+                {item.label}
+              </button>
+            ))}
+          </div>
         </div>
       </header>
 
       {error ? <p className="text-sm text-red-600">{error}</p> : null}
       {clientError ? <p className="text-sm text-red-600">{clientError}</p> : null}
 
-      {!targetData.hasCore ? (
+      {!targetData.hasCore && viewMode !== "focus" ? (
         <Card className="border border-amber-200 bg-amber-50/80 p-4">
           <p className="text-sm text-amber-800">
             Complete ton profil (sexe, taille, age, poids) pour un objectif
@@ -838,142 +865,152 @@ export default function CalorieGaugeClient({
         </Card>
       ) : null}
 
-      <Card className="space-y-4">
-        <div className="flex flex-col items-center gap-4">
-          <CalorieGauge
-            consumed={totals.mealTotal}
-            burned={totals.activityTotal}
-            target={targetData.adjustedTarget}
-            net={totals.net}
-            delta={delta}
-          />
-
-          <p className="text-xs text-[var(--muted)]">
-            Objectif de base {targetData.baseTarget.toFixed(0)} kcal · ajuste avec
-            le sport
-          </p>
-
-          <div className="w-full rounded-2xl border border-[var(--border)] bg-white/70 px-4 py-3">
-            <div className="flex items-center justify-between gap-3">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--muted)]">
-                Rapport {reportRange} jours
+      {showGauge ? (
+        <Card className="space-y-4">
+          <div className="flex flex-col items-center gap-4">
+            <CalorieGauge
+              consumed={totals.mealTotal}
+              burned={totals.activityTotal}
+              target={targetData.adjustedTarget}
+              net={totals.net}
+              delta={delta}
+            />
+            {viewMode === "today" ? (
+              <p className="text-xs text-[var(--muted)]">
+                Objectif de base {targetData.baseTarget.toFixed(0)} kcal · ajuste
+                avec le sport
               </p>
-              <div className="flex rounded-full border border-[var(--border)] bg-white/70 p-1 text-xs font-semibold">
-                {(["7", "30"] as const).map((range) => (
-                  <button
-                    key={range}
-                    type="button"
-                    className={cn(
-                      "rounded-full px-3 py-1 transition",
-                      reportRange === range
-                        ? "bg-[var(--accent)] text-white"
-                        : "text-[var(--muted)]"
-                    )}
-                    onClick={() => setReportRange(range)}
-                  >
-                    {range}j
-                  </button>
-                ))}
-              </div>
-            </div>
-            <div className="mt-3 flex items-center justify-center">
-              <Sparkline
-                values={reportSeries}
-                width={240}
-                height={60}
-                id={`net-${reportRange}`}
-                className="text-[var(--accent)]"
-              />
-            </div>
-            <div className="mt-3 grid grid-cols-2 gap-3 text-sm">
-              <div className="rounded-2xl border border-[var(--border)] bg-white/70 px-3 py-2">
-                <p className="text-[10px] uppercase tracking-[0.2em] text-[var(--muted)]">
-                  Net moyen
-                </p>
-                <p className="mt-1 font-semibold text-[var(--foreground)]">
-                  {reportStats.average.toFixed(0)} kcal
-                </p>
-              </div>
-              <div className="rounded-2xl border border-[var(--border)] bg-white/70 px-3 py-2">
-                <p className="text-[10px] uppercase tracking-[0.2em] text-[var(--muted)]">
-                  Total net
-                </p>
-                <p className="mt-1 font-semibold text-[var(--foreground)]">
-                  {reportStats.total.toFixed(0)} kcal
-                </p>
-              </div>
-              <div className="rounded-2xl border border-[var(--border)] bg-white/70 px-3 py-2">
-                <p className="text-[10px] uppercase tracking-[0.2em] text-[var(--muted)]">
-                  Mini / Maxi
-                </p>
-                <p className="mt-1 font-semibold text-[var(--foreground)]">
-                  {reportStats.min.toFixed(0)} / {reportStats.max.toFixed(0)}
-                </p>
-              </div>
-              <div className="rounded-2xl border border-[var(--border)] bg-white/70 px-3 py-2">
-                <p className="text-[10px] uppercase tracking-[0.2em] text-[var(--muted)]">
-                  Poids
-                </p>
-                <p className="mt-1 font-semibold text-[var(--foreground)]">
-                  {reportWeightDelta === null
-                    ? "--"
-                    : `${reportWeightDelta >= 0 ? "+" : "-"}${Math.abs(
-                        reportWeightDelta
-                      ).toFixed(1)} kg`}
-                </p>
-              </div>
-            </div>
+            ) : null}
           </div>
+        </Card>
+      ) : null}
 
-          <div className="grid w-full grid-cols-2 gap-3">
-            {[
-              {
-                label: "Repas",
-                value: `+${totals.mealTotal.toFixed(0)}`,
-                color: "text-orange-600",
-              },
-              {
-                label: "Sport",
-                value: `-${totals.activityTotal.toFixed(0)}`,
-                color: "text-sky-600",
-              },
-              {
-                label: "Net",
-                value: `${totals.net.toFixed(0)}`,
-                color: "text-[var(--foreground)]",
-              },
-              {
-                label: "Delta",
-                value: `${formatSigned(delta)}`,
-                color: delta > 0 ? "text-red-600" : "text-emerald-600",
-              },
-            ].map((item) => (
-              <div
-                key={item.label}
-                className="rounded-2xl border border-[var(--border)] bg-white/70 px-4 py-3"
-              >
-                <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--muted)]">
-                  {item.label}
-                </p>
-                <p className={cn("mt-2 text-lg font-semibold", item.color)}>
-                  {item.value} kcal
-                </p>
-              </div>
-            ))}
-          </div>
-
-          <div className="w-full rounded-2xl border border-[var(--border)] bg-white/70 px-4 py-3">
+      <Card className="space-y-4">
+        <div className="w-full rounded-2xl border border-[var(--border)] bg-white/70 px-4 py-3">
+          <div className="flex items-center justify-between gap-3">
             <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--muted)]">
-              Equivalent poids
+              Rapport {reportRange} jours
             </p>
-            <p className="mt-2 text-lg font-semibold text-[var(--foreground)]">
-              {weightKg >= 0 ? "+" : "-"}{Math.abs(weightKg).toFixed(2)} kg · {" "}
-              {weightG >= 0 ? "+" : "-"}{Math.abs(weightG).toFixed(0)} g
-            </p>
-            <p className="text-[11px] text-[var(--muted)]">est.</p>
+            <div className="flex rounded-full border border-[var(--border)] bg-white/70 p-1 text-xs font-semibold">
+              {(["7", "30"] as const).map((range) => (
+                <button
+                  key={range}
+                  type="button"
+                  className={cn(
+                    "rounded-full px-3 py-1 transition",
+                    reportRange === range
+                      ? "bg-[var(--accent)] text-white"
+                      : "text-[var(--muted)]"
+                  )}
+                  onClick={() => setReportRange(range)}
+                >
+                  {range}j
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="mt-3 flex items-center justify-center">
+            <Sparkline
+              values={reportSeries}
+              width={240}
+              height={60}
+              id={`net-${reportRange}`}
+              className="text-[var(--accent)]"
+            />
+          </div>
+          <div className="mt-3 grid grid-cols-2 gap-3 text-sm">
+            <div className="rounded-2xl border border-[var(--border)] bg-white/70 px-3 py-2">
+              <p className="text-[10px] uppercase tracking-[0.2em] text-[var(--muted)]">
+                Net moyen
+              </p>
+              <p className="mt-1 font-semibold text-[var(--foreground)]">
+                {reportStats.average.toFixed(0)} kcal
+              </p>
+            </div>
+            <div className="rounded-2xl border border-[var(--border)] bg-white/70 px-3 py-2">
+              <p className="text-[10px] uppercase tracking-[0.2em] text-[var(--muted)]">
+                Total net
+              </p>
+              <p className="mt-1 font-semibold text-[var(--foreground)]">
+                {reportStats.total.toFixed(0)} kcal
+              </p>
+            </div>
+            <div className="rounded-2xl border border-[var(--border)] bg-white/70 px-3 py-2">
+              <p className="text-[10px] uppercase tracking-[0.2em] text-[var(--muted)]">
+                Mini / Maxi
+              </p>
+              <p className="mt-1 font-semibold text-[var(--foreground)]">
+                {reportStats.min.toFixed(0)} / {reportStats.max.toFixed(0)}
+              </p>
+            </div>
+            <div className="rounded-2xl border border-[var(--border)] bg-white/70 px-3 py-2">
+              <p className="text-[10px] uppercase tracking-[0.2em] text-[var(--muted)]">
+                Poids
+              </p>
+              <p className="mt-1 font-semibold text-[var(--foreground)]">
+                {reportWeightDelta === null
+                  ? "--"
+                  : `${reportWeightDelta >= 0 ? "+" : "-"}${Math.abs(
+                      reportWeightDelta
+                    ).toFixed(1)} kg`}
+              </p>
+            </div>
           </div>
         </div>
       </Card>
+
+      {showStats ? (
+        <div className="grid w-full grid-cols-2 gap-3">
+          {[
+            {
+              label: "Repas",
+              value: `+${totals.mealTotal.toFixed(0)}`,
+              color: "text-orange-600",
+            },
+            {
+              label: "Sport",
+              value: `-${totals.activityTotal.toFixed(0)}`,
+              color: "text-sky-600",
+            },
+            {
+              label: "Net",
+              value: `${totals.net.toFixed(0)}`,
+              color: "text-[var(--foreground)]",
+            },
+            {
+              label: "Delta",
+              value: `${formatSigned(delta)}`,
+              color: delta > 0 ? "text-red-600" : "text-emerald-600",
+            },
+          ].map((item) => (
+            <div
+              key={item.label}
+              className="rounded-2xl border border-[var(--border)] bg-white/70 px-4 py-3"
+            >
+              <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--muted)]">
+                {item.label}
+              </p>
+              <p className={cn("mt-2 text-lg font-semibold", item.color)}>
+                {item.value} kcal
+              </p>
+            </div>
+          ))}
+        </div>
+      ) : null}
+
+      {showWeightEquivalent ? (
+        <Card className="space-y-2">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--muted)]">
+            Equivalent poids
+          </p>
+          <p className="text-lg font-semibold text-[var(--foreground)]">
+            {weightKg >= 0 ? "+" : "-"}
+            {Math.abs(weightKg).toFixed(2)} kg · {weightG >= 0 ? "+" : "-"}
+            {Math.abs(weightG).toFixed(0)} g
+          </p>
+          <p className="text-[11px] text-[var(--muted)]">est.</p>
+        </Card>
+      ) : null}
 
       <button
         type="button"
