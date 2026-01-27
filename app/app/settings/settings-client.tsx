@@ -14,7 +14,11 @@ import {
   unsubscribeFromPush,
 } from "@/src/lib/onesignal";
 import { createSupabaseBrowserClient } from "@/src/lib/supabase/client";
-import { getNotificationSupport, getPushDeviceInfo } from "@/src/lib/push/device";
+import {
+  detectPrivateMode,
+  getNotificationSupport,
+  getPushDeviceInfo,
+} from "@/src/lib/push/device";
 
 type Status = "unknown" | "subscribed" | "unsubscribed";
 
@@ -36,10 +40,13 @@ export default function SettingsClient({
   const [message, setMessage] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [testLoading, setTestLoading] = useState(false);
+  const [showInstallGuide, setShowInstallGuide] = useState(false);
+  const [isPrivateMode, setIsPrivateMode] = useState(false);
   const [support, setSupport] = useState<{
     notifications: boolean;
     serviceWorker: boolean;
-  }>({ notifications: true, serviceWorker: true });
+    standalone: boolean;
+  }>({ notifications: true, serviceWorker: true, standalone: false });
   const [permission, setPermission] = useState<
     NotificationPermission | "unsupported"
   >("unsupported");
@@ -52,7 +59,11 @@ export default function SettingsClient({
     serviceWorkerSupported: boolean;
     serviceWorkerRegistered: boolean;
     serviceWorkerScript: string | null;
+    serviceWorkerScope: string | null;
     permission: NotificationPermission | "unsupported";
+    isIos: boolean;
+    isStandalone: boolean;
+    isPrivateMode: boolean;
   } | null>(null);
 
   const initOptions = useCallback(
@@ -60,6 +71,8 @@ export default function SettingsClient({
       appId,
       safari_web_id: safariWebId || undefined,
       notifyButton: { enable: true },
+      serviceWorkerPath: "/sw.js",
+      serviceWorkerParam: { scope: "/" },
     }),
     [appId, safariWebId]
   );
@@ -81,10 +94,12 @@ export default function SettingsClient({
     setSupport({
       notifications: supportInfo.notificationsSupported,
       serviceWorker: supportInfo.serviceWorkerSupported,
+      standalone: supportInfo.isStandalone,
     });
     setPermission(
       supportInfo.notificationsSupported ? Notification.permission : "unsupported"
     );
+    void detectPrivateMode().then((value) => setIsPrivateMode(value));
     const supabase = createSupabaseBrowserClient();
     supabase.auth.getUser().then(({ data }) => {
       setUserId(data.user?.id ?? "");
@@ -122,6 +137,7 @@ export default function SettingsClient({
       typeof Notification === "undefined"
         ? "unsupported"
         : Notification.permission;
+    const supportInfo = getNotificationSupport();
     if (!serviceWorkerSupported) {
       setDiagnostics({
         scriptPresent,
@@ -131,21 +147,29 @@ export default function SettingsClient({
         serviceWorkerSupported: false,
         serviceWorkerRegistered: false,
         serviceWorkerScript: null,
+        serviceWorkerScope: null,
         permission: permissionValue,
+        isIos: supportInfo.isIos,
+        isStandalone: supportInfo.isStandalone,
+        isPrivateMode,
       });
       return;
     }
     void navigator.serviceWorker
       .getRegistrations()
       .then((registrations) => {
-        const matching = registrations.find((registration) => {
-          const urls = [
-            registration.active?.scriptURL,
-            registration.waiting?.scriptURL,
-            registration.installing?.scriptURL,
-          ].filter(Boolean) as string[];
-          return urls.some((url) => url.includes("OneSignalSDKWorker.js"));
-        });
+        const matching =
+          registrations.find((registration) => {
+            const urls = [
+              registration.active?.scriptURL,
+              registration.waiting?.scriptURL,
+              registration.installing?.scriptURL,
+            ].filter(Boolean) as string[];
+            return urls.some(
+              (url) =>
+                url.includes("OneSignalSDKWorker.js") || url.includes("/sw.js")
+            );
+          }) ?? registrations[0];
         if (cancelled) {
           return;
         }
@@ -157,7 +181,11 @@ export default function SettingsClient({
           serviceWorkerSupported: true,
           serviceWorkerRegistered: Boolean(matching),
           serviceWorkerScript: matching?.active?.scriptURL ?? null,
+          serviceWorkerScope: matching?.scope ?? null,
           permission: permissionValue,
+          isIos: supportInfo.isIos,
+          isStandalone: supportInfo.isStandalone,
+          isPrivateMode,
         });
       })
       .catch(() => {
@@ -172,13 +200,17 @@ export default function SettingsClient({
           serviceWorkerSupported: true,
           serviceWorkerRegistered: false,
           serviceWorkerScript: null,
+          serviceWorkerScope: null,
           permission: permissionValue,
+          isIos: supportInfo.isIos,
+          isStandalone: supportInfo.isStandalone,
+          isPrivateMode,
         });
       });
     return () => {
       cancelled = true;
     };
-  }, [debugEnabled]);
+  }, [debugEnabled, isPrivateMode]);
 
   const handleEnable = async () => {
     setLoading(true);
@@ -352,6 +384,14 @@ export default function SettingsClient({
   const isSupported = support.notifications && support.serviceWorker;
   const isPermissionDenied = permission === "denied";
   const supportInfo = getNotificationSupport();
+  const requiresStandaloneInstall =
+    supportInfo.isIos && supportInfo.isSafari && !supportInfo.isStandalone;
+  const canEnablePush =
+    isConfigured &&
+    isSupported &&
+    !isPermissionDenied &&
+    !requiresStandaloneInstall &&
+    !isPrivateMode;
 
   return (
     <div className="space-y-6">
@@ -405,6 +445,42 @@ export default function SettingsClient({
           </p>
         ) : null}
 
+        {requiresStandaloneInstall ? (
+          <div className="space-y-3 rounded-2xl border border-[var(--border)] bg-white/70 p-4 text-sm text-[var(--muted)]">
+            <p>
+              Installe EvoShape sur ton ecran d&apos;accueil pour activer les
+              notifications.
+            </p>
+            <Button
+              variant="soft"
+              size="sm"
+              type="button"
+              onClick={() => setShowInstallGuide((value) => !value)}
+            >
+              {showInstallGuide
+                ? "Masquer le guide iOS"
+                : "Guide d'installation iOS"}
+            </Button>
+            {showInstallGuide ? (
+              <ol className="list-decimal space-y-1 pl-5 text-xs text-[var(--muted)]">
+                <li>Ouvre EvoShape dans Safari.</li>
+                <li>Touche Partager (icone carre + fleche).</li>
+                <li>
+                  Choisis &quot;Sur l&apos;ecran d&apos;accueil&quot; puis valider.
+                </li>
+                <li>Relance EvoShape depuis l&apos;icone installee.</li>
+              </ol>
+            ) : null}
+          </div>
+        ) : null}
+
+        {isPrivateMode ? (
+          <p className="text-sm text-[var(--muted)]">
+            La navigation privee bloque les notifications. Ouvre EvoShape dans
+            une fenetre classique.
+          </p>
+        ) : null}
+
         {isPermissionDenied ? (
           <p className="text-sm text-[var(--muted)]">
             Les notifications sont bloquees pour ce site. Dans ton navigateur,
@@ -426,7 +502,7 @@ export default function SettingsClient({
             <Button
               variant="primary"
               onClick={handleEnable}
-              disabled={!isConfigured || loading || !isSupported}
+              disabled={!canEnablePush || loading}
             >
               {loading ? "Activation..." : "Activer"}
             </Button>
@@ -445,6 +521,9 @@ export default function SettingsClient({
           >
             {testLoading ? "Envoi..." : "Envoyer un test"}
           </Button>
+          <Button variant="outline" href="/app/notifications">
+            Centre de notifications
+          </Button>
         </div>
 
         {message ? (
@@ -460,6 +539,9 @@ export default function SettingsClient({
           <div className="text-xs text-[var(--muted)]">
             <div>appId: {appId || "--"}</div>
             <div>safariWebId: {safariWebId || "--"}</div>
+            <div>iOS: {diagnostics?.isIos ? "yes" : "no"}</div>
+            <div>standalone: {diagnostics?.isStandalone ? "yes" : "no"}</div>
+            <div>private mode: {diagnostics?.isPrivateMode ? "yes" : "no"}</div>
             <div>
               script loaded: {diagnostics?.scriptPresent ? "yes" : "no"}
             </div>
@@ -482,6 +564,7 @@ export default function SettingsClient({
             <div>
               worker script: {diagnostics?.serviceWorkerScript ?? "--"}
             </div>
+            <div>worker scope: {diagnostics?.serviceWorkerScope ?? "--"}</div>
             <div>
               notification permission: {diagnostics?.permission ?? "--"}
             </div>
