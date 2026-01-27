@@ -4,47 +4,107 @@ const clamp = (value: number, min: number, max: number) =>
   Math.min(Math.max(value, min), max);
 
 type CalorieGaugeProps = {
-  net: number;
+  consumed: number;
+  burned: number;
   target: number;
+  net: number;
+  delta: number;
+  size?: number;
 };
 
-export function CalorieGauge({ net, target }: CalorieGaugeProps) {
-  const ratio = target > 0 ? net / target : 0;
-  const progress = clamp(ratio, 0, 1);
-  const overflowRatio = target > 0 ? (net - target) / target : 0;
-  const overflow = overflowRatio > 0 ? Math.min(overflowRatio, 0.45) : 0;
-  const hasTarget = target > 0;
-  const fillProgress = progress > 0 ? Math.max(progress, 0.04) : 0;
-  const fillHeight = `${(fillProgress * 100).toFixed(0)}%`;
+export function CalorieGauge({
+  consumed,
+  burned,
+  target,
+  net,
+  delta,
+  size = 220,
+}: CalorieGaugeProps) {
+  const safeTarget = target > 0 ? target : 1;
+  const consumedProgress = clamp(consumed / safeTarget, 0, 1);
+  const burnedProgress = clamp(burned / safeTarget, 0, 1);
+
+  const stroke = 14;
+  const innerStroke = 10;
+  const center = size / 2;
+  const outerRadius = center - stroke;
+  const innerRadius = outerRadius - 18;
+  const outerCirc = 2 * Math.PI * outerRadius;
+  const innerCirc = 2 * Math.PI * innerRadius;
+
+  const consumedOffset = outerCirc * (1 - consumedProgress);
+  const burnedOffset = innerCirc * (1 - burnedProgress);
+
+  const deltaLabel = delta === 0 ? "0" : delta > 0 ? `+${delta}` : `${delta}`;
 
   return (
-    <div className="flex flex-col items-center gap-3">
-      <div className="relative flex h-[240px] w-24 items-end justify-center overflow-visible">
-        {overflow > 0 ? (
-          <div
-            className="absolute bottom-full left-3 right-3 rounded-t-[28px] bg-red-500/85"
-            style={{ height: `${(overflow * 100).toFixed(0)}%` }}
-          />
-        ) : null}
-        <div className="relative flex h-full w-full flex-col justify-end overflow-hidden rounded-[32px] border border-[var(--border)] bg-[var(--surface-strong)]">
-          <div className="absolute left-2 right-2 top-4 h-[2px] rounded-full bg-[var(--accent-strong)]/60" />
-          <span className="absolute -right-10 top-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--muted)]">
-            Objectif
-          </span>
-          <div
-            className={cn(
-              "absolute bottom-0 left-0 right-0 rounded-[28px] bg-gradient-to-t from-[var(--accent-strong)] via-[var(--accent)] to-emerald-300 transition-all duration-300"
-            )}
-            style={{
-              height: fillHeight,
-              minHeight: fillProgress > 0 ? "12px" : undefined,
-            }}
-          />
+    <div className="relative flex items-center justify-center">
+      <svg
+        width={size}
+        height={size}
+        viewBox={`0 0 ${size} ${size}`}
+        className="-rotate-90"
+        aria-hidden="true"
+      >
+        <circle
+          cx={center}
+          cy={center}
+          r={outerRadius}
+          fill="none"
+          stroke="var(--surface-strong)"
+          strokeWidth={stroke}
+        />
+        <circle
+          cx={center}
+          cy={center}
+          r={outerRadius}
+          fill="none"
+          stroke="#F59E0B"
+          strokeWidth={stroke}
+          strokeLinecap="round"
+          strokeDasharray={outerCirc}
+          strokeDashoffset={consumedOffset}
+        />
+        <circle
+          cx={center}
+          cy={center}
+          r={innerRadius}
+          fill="none"
+          stroke="var(--surface-strong)"
+          strokeWidth={innerStroke}
+        />
+        <circle
+          cx={center}
+          cy={center}
+          r={innerRadius}
+          fill="none"
+          stroke="#38BDF8"
+          strokeWidth={innerStroke}
+          strokeLinecap="round"
+          strokeDasharray={innerCirc}
+          strokeDashoffset={burnedOffset}
+        />
+      </svg>
+
+      <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
+        <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--muted)]">
+          Net
+        </p>
+        <p className="mt-1 text-3xl font-semibold text-[var(--foreground)]">
+          {net.toFixed(0)}
+        </p>
+        <p className="text-xs text-[var(--muted)]">kcal</p>
+        <div
+          className={cn(
+            "mt-2 rounded-full px-3 py-1 text-[11px] font-semibold",
+            delta > 0
+              ? "bg-red-100 text-red-700"
+              : "bg-emerald-100 text-emerald-700"
+          )}
+        >
+          {deltaLabel} kcal
         </div>
       </div>
-      <p className="text-xs text-[var(--muted)]">
-        {hasTarget ? `${(progress * 100).toFixed(0)}%` : "Objectif a definir"}
-      </p>
     </div>
   );
 }

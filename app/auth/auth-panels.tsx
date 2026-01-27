@@ -77,7 +77,7 @@ export default function AuthPanels() {
     <main className="mx-auto w-full max-w-md px-6 pb-16 pt-10">
       <div className="flex flex-col items-center gap-4 text-center">
         <Logo
-          size="2xl"
+          size="3xl"
           showBackground={false}
           showLabel={false}
           className="flex-col"

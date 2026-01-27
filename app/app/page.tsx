@@ -10,9 +10,13 @@ export default async function CalorieGaugePage() {
     { data: profile, error: profileError },
     { data: meals, error: mealError },
     { data: activities, error: activityError },
+    { data: weights, error: weightError },
     { data: userData },
   ] = await Promise.all([
-    supabase.from("profiles").select("target_calories").maybeSingle(),
+    supabase
+      .from("profiles")
+      .select("display_name, sex, birth_year, height_cm, target_calories")
+      .maybeSingle(),
     supabase
       .from("meal_logs")
       .select("id, name, calories, meal_type, recorded_at, created_at")
@@ -25,16 +29,26 @@ export default async function CalorieGaugePage() {
       )
       .eq("recorded_at", today)
       .order("created_at", { ascending: false }),
+    supabase
+      .from("weights")
+      .select("id, recorded_at, weight_kg")
+      .order("recorded_at", { ascending: false })
+      .limit(1),
     supabase.auth.getUser(),
   ]);
 
   const errorMessage =
-    profileError?.message ?? mealError?.message ?? activityError?.message ?? null;
+    profileError?.message ??
+    mealError?.message ??
+    activityError?.message ??
+    weightError?.message ??
+    null;
 
   return (
     <CalorieGaugeClient
       userId={userData.user?.id ?? ""}
-      target={profile?.target_calories ?? 0}
+      profile={profile}
+      latestWeight={weights?.[0] ?? null}
       meals={meals ?? []}
       activities={activities ?? []}
       error={errorMessage}
