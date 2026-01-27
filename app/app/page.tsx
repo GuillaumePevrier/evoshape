@@ -4,7 +4,14 @@ import CalorieGaugeClient from "./calorie-gauge-client";
 
 export default async function CalorieGaugePage() {
   const supabase = await createSupabaseServerClient();
-  const today = getISODate();
+  const now = new Date();
+  const today = getISODate(now);
+  const lastSevenDays = Array.from({ length: 7 }, (_, index) => {
+    const date = new Date(now);
+    date.setDate(now.getDate() - (6 - index));
+    return getISODate(date);
+  });
+  const startDate = lastSevenDays[0];
 
   const [
     { data: profile, error: profileError },
@@ -20,14 +27,14 @@ export default async function CalorieGaugePage() {
     supabase
       .from("meal_logs")
       .select("id, name, calories, meal_type, recorded_at, created_at")
-      .eq("recorded_at", today)
+      .gte("recorded_at", startDate)
       .order("created_at", { ascending: false }),
     supabase
       .from("activity_logs")
       .select(
         "id, activity_type, calories_burned, duration_min, recorded_at, created_at"
       )
-      .eq("recorded_at", today)
+      .gte("recorded_at", startDate)
       .order("created_at", { ascending: false }),
     supabase
       .from("weights")
@@ -44,13 +51,37 @@ export default async function CalorieGaugePage() {
     weightError?.message ??
     null;
 
+  const mealByDate = (meals ?? []).reduce<Record<string, number>>((acc, item) => {
+    acc[item.recorded_at] = (acc[item.recorded_at] ?? 0) + (item.calories ?? 0);
+    return acc;
+  }, {});
+
+  const activityByDate = (activities ?? []).reduce<Record<string, number>>(
+    (acc, item) => {
+      acc[item.recorded_at] =
+        (acc[item.recorded_at] ?? 0) + (item.calories_burned ?? 0);
+      return acc;
+    },
+    {}
+  );
+
+  const netSeries = lastSevenDays.map(
+    (date) => (mealByDate[date] ?? 0) - (activityByDate[date] ?? 0)
+  );
+
+  const todayMeals = (meals ?? []).filter((item) => item.recorded_at === today);
+  const todayActivities = (activities ?? []).filter(
+    (item) => item.recorded_at === today
+  );
+
   return (
     <CalorieGaugeClient
       userId={userData.user?.id ?? ""}
       profile={profile}
       latestWeight={weights?.[0] ?? null}
-      meals={meals ?? []}
-      activities={activities ?? []}
+      meals={todayMeals}
+      activities={todayActivities}
+      netSeries={netSeries}
       error={errorMessage}
     />
   );

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState, useEffect, type TouchEvent } from "react";
+import { useMemo, useRef, useState, useEffect, type PointerEvent } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
@@ -11,6 +11,7 @@ import { LogoutButton } from "@/components/app/logout-button";
 import { createSupabaseBrowserClient } from "@/src/lib/supabase/client";
 import { getISODate } from "@/lib/date";
 import { cn } from "@/lib/cn";
+import { Sparkline } from "@/components/ui/sparkline";
 
 type MealLog = {
   id: number;
@@ -50,6 +51,7 @@ type CalorieGaugeClientProps = {
   latestWeight: WeightEntry | null;
   meals: MealLog[];
   activities: ActivityLog[];
+  netSeries: number[];
   error: string | null;
 };
 
@@ -139,6 +141,7 @@ export default function CalorieGaugeClient({
   latestWeight,
   meals,
   activities,
+  netSeries,
   error,
 }: CalorieGaugeClientProps) {
   const router = useRouter();
@@ -154,8 +157,11 @@ export default function CalorieGaugeClient({
   const [clientError, setClientError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [sheetOpen, setSheetOpen] = useState(false);
+  const [sheetVisible, setSheetVisible] = useState(false);
   const [sheetView, setSheetView] = useState<SheetView>("menu");
   const [mounted, setMounted] = useState(false);
+  const [sheetOffset, setSheetOffset] = useState(0);
+  const [isDragging, setIsDragging] = useState(false);
 
   const dragStart = useRef<number | null>(null);
 
@@ -223,9 +229,17 @@ export default function CalorieGaugeClient({
     setWeightLog(data?.[0] ?? null);
   };
 
+  const openSheet = () => {
+    setSheetOpen(true);
+    requestAnimationFrame(() => setSheetVisible(true));
+  };
+
   const closeSheet = () => {
-    setSheetOpen(false);
+    setSheetVisible(false);
     setSheetView("menu");
+    setSheetOffset(0);
+    setIsDragging(false);
+    window.setTimeout(() => setSheetOpen(false), 220);
   };
 
   const handleAddMeal = async (payload?: { calories?: number; name?: string }) => {
@@ -382,36 +396,59 @@ export default function CalorieGaugeClient({
     }
   };
 
-  const handleSheetTouchStart = (event: TouchEvent<HTMLDivElement>) => {
-    dragStart.current = event.touches[0]?.clientY ?? null;
+  const handleSheetDragStart = (event: PointerEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    event.currentTarget.setPointerCapture(event.pointerId);
+    dragStart.current = event.clientY ?? null;
+    setIsDragging(true);
   };
 
-  const handleSheetTouchMove = (event: TouchEvent<HTMLDivElement>) => {
+  const handleSheetDragMove = (event: PointerEvent<HTMLDivElement>) => {
     if (dragStart.current === null) return;
-    const deltaY = event.touches[0]?.clientY - dragStart.current;
-    if (deltaY > 90) {
-      dragStart.current = null;
-      closeSheet();
+    const deltaY = event.clientY - dragStart.current;
+    if (deltaY > 0) {
+      setSheetOffset(Math.min(deltaY, 240));
     }
   };
 
-  const handleSheetTouchEnd = () => {
+  const handleSheetDragEnd = () => {
+    if (sheetOffset > 120) {
+      closeSheet();
+    } else {
+      setSheetOffset(0);
+    }
+    setIsDragging(false);
     dragStart.current = null;
   };
 
   const sheetContent = (
     <div
-      className="fixed inset-0 z-50 flex items-end justify-center bg-black/45 px-4 pb-4"
+      className={cn(
+        "fixed inset-0 z-50 flex items-end justify-center px-4 pb-4 transition-opacity duration-200",
+        sheetVisible ? "bg-black/45 opacity-100" : "opacity-0"
+      )}
       onClick={closeSheet}
     >
       <div
-        className="w-full max-w-md max-h-[80vh] overflow-y-auto rounded-3xl border border-[var(--border)] bg-[var(--surface)] p-5 shadow-[0_24px_70px_rgba(17,16,14,0.25)]"
+        className={cn(
+          "w-full max-w-md max-h-[80vh] overflow-y-auto rounded-3xl border border-[var(--border)] bg-[var(--surface)] p-5 shadow-[0_24px_70px_rgba(17,16,14,0.25)] transition-transform duration-300"
+        )}
+        style={{
+          transform: `translateY(${sheetOffset + (sheetVisible ? 0 : 24)}px)`,
+          transitionTimingFunction: isDragging
+            ? "linear"
+            : "cubic-bezier(0.18, 0.9, 0.32, 1.2)",
+        }}
         onClick={(event) => event.stopPropagation()}
-        onTouchStart={handleSheetTouchStart}
-        onTouchMove={handleSheetTouchMove}
-        onTouchEnd={handleSheetTouchEnd}
       >
-        <div className="mx-auto mb-3 h-1.5 w-12 rounded-full bg-[var(--border)]" />
+        <div
+          className="mx-auto mb-3 h-1.5 w-12 rounded-full bg-[var(--border)]"
+          role="presentation"
+          onPointerDown={handleSheetDragStart}
+          onPointerMove={handleSheetDragMove}
+          onPointerUp={handleSheetDragEnd}
+          onPointerCancel={handleSheetDragEnd}
+        />
         <div className="flex items-center justify-between">
           <p className="text-sm font-semibold text-[var(--foreground)]">
             {sheetView === "menu" ? "Actions" : "Ajouter"}
@@ -645,7 +682,7 @@ export default function CalorieGaugeClient({
   );
 
   return (
-    <div className="relative space-y-5 pb-24">
+    <div className="relative space-y-5 pb-28">
       <header className="flex items-center justify-between">
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--muted)]">
@@ -690,6 +727,24 @@ export default function CalorieGaugeClient({
             Objectif de base {targetData.baseTarget.toFixed(0)} kcal · ajuste avec
             le sport
           </p>
+
+          <div className="w-full rounded-2xl border border-[var(--border)] bg-white/70 px-4 py-3">
+            <div className="flex items-center justify-between">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--muted)]">
+                7 derniers jours
+              </p>
+              <span className="text-xs text-[var(--muted)]">kcal nettes</span>
+            </div>
+            <div className="mt-3 flex items-center justify-center">
+              <Sparkline
+                values={netSeries}
+                width={240}
+                height={60}
+                id="net-7"
+                className="text-[var(--accent)]"
+              />
+            </div>
+          </div>
 
           <div className="grid w-full grid-cols-2 gap-3">
             {[
@@ -744,9 +799,9 @@ export default function CalorieGaugeClient({
       <button
         type="button"
         aria-label="Ouvrir le menu"
-        className="fixed bottom-6 left-1/2 z-40 flex h-16 w-16 -translate-x-1/2 items-center justify-center rounded-full bg-[var(--accent)] text-2xl text-white shadow-[0_18px_40px_rgba(12,141,133,0.35)]"
+        className="fixed bottom-6 left-1/2 z-40 flex h-16 w-16 -translate-x-1/2 items-center justify-center rounded-full bg-[var(--accent)] text-2xl text-white shadow-[0_18px_40px_rgba(12,141,133,0.35)] transition-transform duration-300 hover:scale-[1.03]"
         onClick={() => {
-          setSheetOpen(true);
+          openSheet();
           setSheetView("menu");
         }}
       >

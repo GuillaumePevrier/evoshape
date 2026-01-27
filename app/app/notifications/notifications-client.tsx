@@ -1,7 +1,6 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { createSupabaseBrowserClient } from "@/src/lib/supabase/client";
@@ -144,33 +143,37 @@ export default function NotificationsClient({
   };
 
   return (
-    <div className="space-y-6">
-      <PageHeader
-        title="Centre de notifications"
-        description="Retrouve tes messages et garde le suivi."
-        action={
-          <div className="flex flex-wrap gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={markAllRead}
-              disabled={loading || unreadIds.length === 0}
-            >
-              Tout marquer lu
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={clearAll}
-              disabled={loading || items.length === 0}
-            >
-              Vider
-            </Button>
-          </div>
-        }
-      />
+    <div className="space-y-5">
+      <header className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--muted)]">
+            Notifications
+          </p>
+          <h1 className="mt-1 text-2xl font-semibold text-[var(--foreground)]">
+            Centre
+          </h1>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={markAllRead}
+            disabled={loading || unreadIds.length === 0}
+          >
+            Tout marquer lu
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={clearAll}
+            disabled={loading || items.length === 0}
+          >
+            Vider
+          </Button>
+        </div>
+      </header>
 
-      <Card className="flex flex-wrap items-center justify-between gap-3 text-sm">
+      <Card className="flex flex-wrap items-center justify-between gap-3 border border-[var(--border)] bg-white/70 text-sm">
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--muted)]">
             Non lues
@@ -180,18 +183,21 @@ export default function NotificationsClient({
           </p>
         </div>
         <p className="text-xs text-[var(--muted)]">
-          Les notifications supprimees sont retirees de la liste (soft delete).
+          Les notifications supprimees sont retirees de la liste.
         </p>
       </Card>
 
       {items.length === 0 ? (
-        <Card className="text-sm text-[var(--muted)]">
+        <Card className="border border-[var(--border)] bg-white/70 text-sm text-[var(--muted)]">
           Aucune notification pour le moment.
         </Card>
       ) : (
         <div className="space-y-3">
           {items.map((item) => (
-            <Card key={item.id} className="space-y-3">
+            <Card
+              key={item.id}
+              className="space-y-3 border border-[var(--border)] bg-white/70"
+            >
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--muted)]">
