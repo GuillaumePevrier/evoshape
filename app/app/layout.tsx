@@ -9,7 +9,7 @@ import { OneSignalSessionSync } from "@/components/app/onesignal-session-sync";
 import { createSupabaseServerClient } from "@/src/lib/supabase/server";
 
 const navItems = [
-  { href: "/app", label: "Dashboard", secondary: "Resume" },
+  { href: "/app", label: "Jauge", secondary: "Aujourd'hui" },
   { href: "/app/profile", label: "Profil", secondary: "Objectifs" },
   { href: "/app/weight", label: "Poids", secondary: "Historique" },
   { href: "/app/food", label: "Repas", secondary: "Journal" },
