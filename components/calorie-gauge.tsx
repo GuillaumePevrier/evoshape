@@ -14,6 +14,8 @@ export function CalorieGauge({ net, target }: CalorieGaugeProps) {
   const overflowRatio = target > 0 ? (net - target) / target : 0;
   const overflow = overflowRatio > 0 ? Math.min(overflowRatio, 0.45) : 0;
   const hasTarget = target > 0;
+  const fillProgress = progress > 0 ? Math.max(progress, 0.04) : 0;
+  const fillHeight = `${(fillProgress * 100).toFixed(0)}%`;
 
   return (
     <div className="flex flex-col items-center gap-3">
@@ -33,7 +35,10 @@ export function CalorieGauge({ net, target }: CalorieGaugeProps) {
             className={cn(
               "absolute bottom-0 left-0 right-0 rounded-[28px] bg-gradient-to-t from-[var(--accent-strong)] via-[var(--accent)] to-emerald-300 transition-all duration-300"
             )}
-            style={{ height: `${(progress * 100).toFixed(0)}%` }}
+            style={{
+              height: fillHeight,
+              minHeight: fillProgress > 0 ? "12px" : undefined,
+            }}
           />
         </div>
       </div>

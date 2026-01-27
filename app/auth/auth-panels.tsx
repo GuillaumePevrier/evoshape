@@ -76,7 +76,12 @@ export default function AuthPanels() {
   return (
     <main className="mx-auto w-full max-w-md px-6 pb-16 pt-10">
       <div className="flex flex-col items-center gap-4 text-center">
-        <Logo />
+        <Logo
+          size="2xl"
+          showBackground={false}
+          showLabel={false}
+          className="flex-col"
+        />
         <div>
           <h1 className="text-2xl font-semibold text-[var(--foreground)]">
             {mode === "login" ? "Bon retour" : "Creer ton compte"}
