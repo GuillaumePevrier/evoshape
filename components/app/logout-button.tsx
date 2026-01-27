@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { createSupabaseBrowserClient } from "@/src/lib/supabase/client";
+import { logoutOneSignal } from "@/src/lib/onesignal";
 
 export function LogoutButton() {
   const router = useRouter();
@@ -11,6 +12,7 @@ export function LogoutButton() {
 
   const handleLogout = async () => {
     setIsLoading(true);
+    await logoutOneSignal();
     const supabase = createSupabaseBrowserClient();
     await supabase.auth.signOut();
     router.push("/auth");

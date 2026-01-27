@@ -22,6 +22,7 @@ Renseigner au minimum:
 - `NEXT_PUBLIC_SUPABASE_ANON_KEY` (ou `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY`)
 - `SUPABASE_SERVICE_ROLE_KEY` (server only)
 - `NEXT_PUBLIC_ONESIGNAL_APP_ID` (optionnel)
+- `ONESIGNAL_REST_API_KEY` (server only, requis pour l'envoi test)
 
 3) Appliquer les migrations Supabase:
 ```bash

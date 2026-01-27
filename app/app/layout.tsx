@@ -5,6 +5,7 @@ import { Logo } from "@/components/logo";
 import { AppNavLink } from "@/components/app/nav-link";
 import { Button } from "@/components/ui/button";
 import { LogoutButton } from "@/components/app/logout-button";
+import { OneSignalSessionSync } from "@/components/app/onesignal-session-sync";
 import { createSupabaseServerClient } from "@/src/lib/supabase/server";
 
 const navItems = [
@@ -13,7 +14,8 @@ const navItems = [
   { href: "/app/weight", label: "Poids", secondary: "Historique" },
   { href: "/app/food", label: "Repas", secondary: "Journal" },
   { href: "/app/activity", label: "Activite", secondary: "Calories" },
-  { href: "/app/settings", label: "Notifications", secondary: "Push" },
+  { href: "/app/notifications", label: "Notifications", secondary: "Centre" },
+  { href: "/app/settings", label: "Parametres", secondary: "Push" },
 ];
 
 export default async function AppLayout({ children }: { children: ReactNode }) {
@@ -24,8 +26,23 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
     redirect("/auth");
   }
 
+  const { count: unreadCount } = await supabase
+    .from("notifications")
+    .select("id", { count: "exact", head: true })
+    .eq("user_id", data.user.id)
+    .is("read_at", null)
+    .is("deleted_at", null);
+
+  const appId = process.env.NEXT_PUBLIC_ONESIGNAL_APP_ID ?? "";
+  const safariWebId = process.env.NEXT_PUBLIC_ONESIGNAL_SAFARI_WEB_ID ?? "";
+
   return (
     <div className="min-h-screen pb-10">
+      <OneSignalSessionSync
+        userId={data.user.id}
+        appId={appId}
+        safariWebId={safariWebId}
+      />
       <header className="sticky top-0 z-20 border-b border-[var(--border)] bg-[var(--surface)]/90 backdrop-blur">
         <div className="mx-auto flex w-full max-w-6xl items-center justify-between px-6 py-4">
           <Logo />
@@ -46,7 +63,15 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
             </p>
             <nav className="mt-4 flex flex-col gap-2">
               {navItems.map((item) => (
-                <AppNavLink key={item.href} {...item} />
+                <AppNavLink
+                  key={item.href}
+                  {...item}
+                  badgeCount={
+                    item.href === "/app/notifications"
+                      ? unreadCount ?? 0
+                      : undefined
+                  }
+                />
               ))}
             </nav>
           </div>

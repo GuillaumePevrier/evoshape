@@ -8,11 +8,13 @@ type NavLinkProps = {
   href: string;
   label: string;
   secondary?: string;
+  badgeCount?: number;
 };
 
-export function AppNavLink({ href, label, secondary }: NavLinkProps) {
+export function AppNavLink({ href, label, secondary, badgeCount }: NavLinkProps) {
   const pathname = usePathname();
   const isActive = pathname === href;
+  const showBadge = typeof badgeCount === "number" && badgeCount > 0;
 
   return (
     <Link
@@ -24,7 +26,14 @@ export function AppNavLink({ href, label, secondary }: NavLinkProps) {
           : "text-[var(--muted)] hover:border-[var(--border)] hover:bg-white/70"
       )}
     >
-      <span className="font-semibold text-[var(--foreground)]">{label}</span>
+      <div className="flex items-center gap-2">
+        <span className="font-semibold text-[var(--foreground)]">{label}</span>
+        {showBadge ? (
+          <span className="rounded-full bg-[var(--accent-soft)] px-2 py-0.5 text-[10px] font-semibold text-[var(--accent-strong)]">
+            {badgeCount}
+          </span>
+        ) : null}
+      </div>
       {secondary ? (
         <span className="text-xs text-[var(--muted)]">{secondary}</span>
       ) : null}

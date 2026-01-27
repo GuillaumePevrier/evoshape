@@ -1,5 +1,6 @@
 .next/
 node_modules/
+.tmp/
 .env*
 !.env.example
 *.log
