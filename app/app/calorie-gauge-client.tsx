@@ -51,16 +51,18 @@ type CalorieGaugeClientProps = {
   latestWeight: WeightEntry | null;
   meals: MealLog[];
   activities: ActivityLog[];
-  netSeries: number[];
+  netSeries7: number[];
+  netSeries30: number[];
+  weightEntries: WeightEntry[];
   error: string | null;
 };
 
-type SheetView = "menu" | "meal" | "activity" | "weight";
+type SheetView = "menu" | "meal" | "activity" | "weight" | "reports";
 
 type WheelAction = {
-  id: SheetView | "profile" | "notifications" | "history";
+  id: SheetView | "profile" | "notifications";
   label: string;
-  icon: string;
+  helper?: string;
   type: "sheet" | "route";
   href?: string;
 };
@@ -76,15 +78,20 @@ const QUICK_ACTIVITIES = [
 ];
 
 const wheelActions: WheelAction[] = [
-  { id: "meal", label: "Repas", icon: "🍽️", type: "sheet" },
-  { id: "activity", label: "Activite", icon: "🏃", type: "sheet" },
-  { id: "weight", label: "Poids", icon: "⚖️", type: "sheet" },
-  { id: "history", label: "Historique", icon: "📈", type: "route", href: "/app/weight" },
-  { id: "profile", label: "Profil", icon: "👤", type: "route", href: "/app/profile" },
+  { id: "meal", label: "Ajouter repas", helper: "Calories + nom", type: "sheet" },
+  {
+    id: "activity",
+    label: "Ajouter activite",
+    helper: "Calories brulees",
+    type: "sheet",
+  },
+  { id: "weight", label: "Ajouter poids", helper: "Poids du jour", type: "sheet" },
+  { id: "reports", label: "Rapports", helper: "7 & 30 jours", type: "sheet" },
+  { id: "profile", label: "Profil", helper: "Objectifs & profil", type: "route", href: "/app/profile" },
   {
     id: "notifications",
     label: "Notifications",
-    icon: "🔔",
+    helper: "Messages & alertes",
     type: "route",
     href: "/app/notifications",
   },
@@ -141,13 +148,16 @@ export default function CalorieGaugeClient({
   latestWeight,
   meals,
   activities,
-  netSeries,
+  netSeries7,
+  netSeries30,
+  weightEntries,
   error,
 }: CalorieGaugeClientProps) {
   const router = useRouter();
   const [mealLogs, setMealLogs] = useState<MealLog[]>(meals);
   const [activityLogs, setActivityLogs] = useState<ActivityLog[]>(activities);
-  const [weightLog, setWeightLog] = useState<WeightEntry | null>(latestWeight);
+  const [weightEntriesState, setWeightEntriesState] =
+    useState<WeightEntry[]>(weightEntries);
   const [mealName, setMealName] = useState("");
   const [mealCalories, setMealCalories] = useState("");
   const [activityType, setActivityType] = useState("");
@@ -162,6 +172,7 @@ export default function CalorieGaugeClient({
   const [mounted, setMounted] = useState(false);
   const [sheetOffset, setSheetOffset] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
+  const [reportRange, setReportRange] = useState<"7" | "30">("7");
 
   const dragStart = useRef<number | null>(null);
 
@@ -183,9 +194,17 @@ export default function CalorieGaugeClient({
     return { mealTotal, activityTotal, net };
   }, [activityLogs, mealLogs]);
 
+  const latestWeightEntry = useMemo(
+    () =>
+      weightEntriesState.length > 0
+        ? weightEntriesState[weightEntriesState.length - 1]
+        : latestWeight,
+    [latestWeight, weightEntriesState]
+  );
+
   const targetData = useMemo(
-    () => computeDailyTarget(profile, weightLog, totals.activityTotal),
-    [profile, weightLog, totals.activityTotal]
+    () => computeDailyTarget(profile, latestWeightEntry, totals.activityTotal),
+    [profile, latestWeightEntry, totals.activityTotal]
   );
 
   const delta = totals.net - targetData.adjustedTarget;
@@ -196,6 +215,37 @@ export default function CalorieGaugeClient({
     day: "numeric",
     month: "short",
   }).format(new Date());
+
+  const reportSeries = reportRange === "7" ? netSeries7 : netSeries30;
+  const reportStats = useMemo(() => {
+    if (reportSeries.length === 0) {
+      return { total: 0, average: 0, min: 0, max: 0 };
+    }
+    const total = reportSeries.reduce((sum, value) => sum + value, 0);
+    const average = total / reportSeries.length;
+    const min = Math.min(...reportSeries);
+    const max = Math.max(...reportSeries);
+    return { total, average, min, max };
+  }, [reportSeries]);
+
+  const reportWeightDelta = useMemo(() => {
+    if (weightEntriesState.length < 2) return null;
+    const days = reportRange === "7" ? 7 : 30;
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - (days - 1));
+    const filtered = weightEntriesState
+      .filter((entry) => new Date(entry.recorded_at) >= cutoff)
+      .sort(
+        (a, b) =>
+          new Date(a.recorded_at).getTime() -
+          new Date(b.recorded_at).getTime()
+      );
+    if (filtered.length < 2) return null;
+    const first = Number(filtered[0].weight_kg);
+    const last = Number(filtered[filtered.length - 1].weight_kg);
+    if (!Number.isFinite(first) || !Number.isFinite(last)) return null;
+    return last - first;
+  }, [reportRange, weightEntriesState]);
 
   const refreshMeals = async () => {
     const supabase = createSupabaseBrowserClient();
@@ -224,9 +274,9 @@ export default function CalorieGaugeClient({
     const { data } = await supabase
       .from("weights")
       .select("id, recorded_at, weight_kg")
-      .order("recorded_at", { ascending: false })
-      .limit(1);
-    setWeightLog(data?.[0] ?? null);
+      .gte("recorded_at", getISODate(new Date(Date.now() - 29 * 86400000)))
+      .order("recorded_at", { ascending: true });
+    setWeightEntriesState((data ?? []) as WeightEntry[]);
   };
 
   const openSheet = () => {
@@ -451,7 +501,11 @@ export default function CalorieGaugeClient({
         />
         <div className="flex items-center justify-between">
           <p className="text-sm font-semibold text-[var(--foreground)]">
-            {sheetView === "menu" ? "Actions" : "Ajouter"}
+            {sheetView === "menu"
+              ? "Actions"
+              : sheetView === "reports"
+                ? "Rapports"
+                : "Ajouter"}
           </p>
           {sheetView !== "menu" ? (
             <Button
@@ -476,11 +530,15 @@ export default function CalorieGaugeClient({
                 <button
                   key={action.id}
                   type="button"
-                  className="flex min-w-[92px] snap-center flex-col items-center gap-2 rounded-2xl border border-[var(--border)] bg-white/70 px-3 py-3 text-center text-xs font-semibold text-[var(--foreground)] transition hover:bg-white"
+                  className="flex min-w-[150px] snap-center flex-col items-start gap-1 rounded-2xl border border-[var(--border)] bg-white/70 px-3 py-3 text-left text-sm font-semibold text-[var(--foreground)] transition hover:bg-white"
                   onClick={() => handleAction(action)}
                 >
-                  <span className="text-xl">{action.icon}</span>
                   <span>{action.label}</span>
+                  {action.helper ? (
+                    <span className="text-xs font-medium text-[var(--muted)]">
+                      {action.helper}
+                    </span>
+                  ) : null}
                 </button>
               ))}
             </div>
@@ -671,6 +729,73 @@ export default function CalorieGaugeClient({
           </div>
         ) : null}
 
+        {sheetView === "reports" ? (
+          <div className="mt-4 space-y-3">
+            <div className="flex rounded-full border border-[var(--border)] bg-white/70 p-1 text-xs font-semibold">
+              {(["7", "30"] as const).map((range) => (
+                <button
+                  key={range}
+                  type="button"
+                  className={cn(
+                    "rounded-full px-3 py-1 transition",
+                    reportRange === range
+                      ? "bg-[var(--accent)] text-white"
+                      : "text-[var(--muted)]"
+                  )}
+                  onClick={() => setReportRange(range)}
+                >
+                  {range} jours
+                </button>
+              ))}
+            </div>
+            <Sparkline
+              values={reportSeries}
+              width={260}
+              height={70}
+              id={`net-sheet-${reportRange}`}
+              className="text-[var(--accent)]"
+            />
+            <div className="grid grid-cols-2 gap-3 text-sm">
+              <div className="rounded-2xl border border-[var(--border)] bg-white/70 px-3 py-2">
+                <p className="text-[10px] uppercase tracking-[0.2em] text-[var(--muted)]">
+                  Net moyen
+                </p>
+                <p className="mt-1 font-semibold text-[var(--foreground)]">
+                  {reportStats.average.toFixed(0)} kcal
+                </p>
+              </div>
+              <div className="rounded-2xl border border-[var(--border)] bg-white/70 px-3 py-2">
+                <p className="text-[10px] uppercase tracking-[0.2em] text-[var(--muted)]">
+                  Total net
+                </p>
+                <p className="mt-1 font-semibold text-[var(--foreground)]">
+                  {reportStats.total.toFixed(0)} kcal
+                </p>
+              </div>
+              <div className="rounded-2xl border border-[var(--border)] bg-white/70 px-3 py-2">
+                <p className="text-[10px] uppercase tracking-[0.2em] text-[var(--muted)]">
+                  Mini / Maxi
+                </p>
+                <p className="mt-1 font-semibold text-[var(--foreground)]">
+                  {reportStats.min.toFixed(0)} / {reportStats.max.toFixed(0)}
+                </p>
+              </div>
+              <div className="rounded-2xl border border-[var(--border)] bg-white/70 px-3 py-2">
+                <p className="text-[10px] uppercase tracking-[0.2em] text-[var(--muted)]">
+                  Poids
+                </p>
+                <p className="mt-1 font-semibold text-[var(--foreground)]">
+                  {reportWeightDelta === null
+                    ? "--"
+                    : `${reportWeightDelta >= 0 ? "+" : "-"}${Math.abs(
+                        reportWeightDelta
+                      ).toFixed(1)} kg`}
+                </p>
+              </div>
+            </div>
+          </div>
+        ) : null}
+
         {clientError ? (
           <p className="mt-3 text-sm text-red-600">{clientError}</p>
         ) : null}
@@ -729,20 +854,74 @@ export default function CalorieGaugeClient({
           </p>
 
           <div className="w-full rounded-2xl border border-[var(--border)] bg-white/70 px-4 py-3">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between gap-3">
               <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--muted)]">
-                7 derniers jours
+                Rapport {reportRange} jours
               </p>
-              <span className="text-xs text-[var(--muted)]">kcal nettes</span>
+              <div className="flex rounded-full border border-[var(--border)] bg-white/70 p-1 text-xs font-semibold">
+                {(["7", "30"] as const).map((range) => (
+                  <button
+                    key={range}
+                    type="button"
+                    className={cn(
+                      "rounded-full px-3 py-1 transition",
+                      reportRange === range
+                        ? "bg-[var(--accent)] text-white"
+                        : "text-[var(--muted)]"
+                    )}
+                    onClick={() => setReportRange(range)}
+                  >
+                    {range}j
+                  </button>
+                ))}
+              </div>
             </div>
             <div className="mt-3 flex items-center justify-center">
               <Sparkline
-                values={netSeries}
+                values={reportSeries}
                 width={240}
                 height={60}
-                id="net-7"
+                id={`net-${reportRange}`}
                 className="text-[var(--accent)]"
               />
+            </div>
+            <div className="mt-3 grid grid-cols-2 gap-3 text-sm">
+              <div className="rounded-2xl border border-[var(--border)] bg-white/70 px-3 py-2">
+                <p className="text-[10px] uppercase tracking-[0.2em] text-[var(--muted)]">
+                  Net moyen
+                </p>
+                <p className="mt-1 font-semibold text-[var(--foreground)]">
+                  {reportStats.average.toFixed(0)} kcal
+                </p>
+              </div>
+              <div className="rounded-2xl border border-[var(--border)] bg-white/70 px-3 py-2">
+                <p className="text-[10px] uppercase tracking-[0.2em] text-[var(--muted)]">
+                  Total net
+                </p>
+                <p className="mt-1 font-semibold text-[var(--foreground)]">
+                  {reportStats.total.toFixed(0)} kcal
+                </p>
+              </div>
+              <div className="rounded-2xl border border-[var(--border)] bg-white/70 px-3 py-2">
+                <p className="text-[10px] uppercase tracking-[0.2em] text-[var(--muted)]">
+                  Mini / Maxi
+                </p>
+                <p className="mt-1 font-semibold text-[var(--foreground)]">
+                  {reportStats.min.toFixed(0)} / {reportStats.max.toFixed(0)}
+                </p>
+              </div>
+              <div className="rounded-2xl border border-[var(--border)] bg-white/70 px-3 py-2">
+                <p className="text-[10px] uppercase tracking-[0.2em] text-[var(--muted)]">
+                  Poids
+                </p>
+                <p className="mt-1 font-semibold text-[var(--foreground)]">
+                  {reportWeightDelta === null
+                    ? "--"
+                    : `${reportWeightDelta >= 0 ? "+" : "-"}${Math.abs(
+                        reportWeightDelta
+                      ).toFixed(1)} kg`}
+                </p>
+              </div>
             </div>
           </div>
 

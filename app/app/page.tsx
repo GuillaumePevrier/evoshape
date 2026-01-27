@@ -11,7 +11,12 @@ export default async function CalorieGaugePage() {
     date.setDate(now.getDate() - (6 - index));
     return getISODate(date);
   });
-  const startDate = lastSevenDays[0];
+  const lastThirtyDays = Array.from({ length: 30 }, (_, index) => {
+    const date = new Date(now);
+    date.setDate(now.getDate() - (29 - index));
+    return getISODate(date);
+  });
+  const startDate = lastThirtyDays[0];
 
   const [
     { data: profile, error: profileError },
@@ -39,8 +44,8 @@ export default async function CalorieGaugePage() {
     supabase
       .from("weights")
       .select("id, recorded_at, weight_kg")
-      .order("recorded_at", { ascending: false })
-      .limit(1),
+      .gte("recorded_at", startDate)
+      .order("recorded_at", { ascending: true }),
     supabase.auth.getUser(),
   ]);
 
@@ -65,7 +70,10 @@ export default async function CalorieGaugePage() {
     {}
   );
 
-  const netSeries = lastSevenDays.map(
+  const netSeries7 = lastSevenDays.map(
+    (date) => (mealByDate[date] ?? 0) - (activityByDate[date] ?? 0)
+  );
+  const netSeries30 = lastThirtyDays.map(
     (date) => (mealByDate[date] ?? 0) - (activityByDate[date] ?? 0)
   );
 
@@ -73,15 +81,22 @@ export default async function CalorieGaugePage() {
   const todayActivities = (activities ?? []).filter(
     (item) => item.recorded_at === today
   );
+  const weightEntries = weights ?? [];
+  const latestWeight =
+    weightEntries.length > 0
+      ? weightEntries[weightEntries.length - 1]
+      : null;
 
   return (
     <CalorieGaugeClient
       userId={userData.user?.id ?? ""}
       profile={profile}
-      latestWeight={weights?.[0] ?? null}
+      latestWeight={latestWeight}
       meals={todayMeals}
       activities={todayActivities}
-      netSeries={netSeries}
+      netSeries7={netSeries7}
+      netSeries30={netSeries30}
+      weightEntries={weightEntries}
       error={errorMessage}
     />
   );
