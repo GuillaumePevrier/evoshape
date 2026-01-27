@@ -1,0 +1,18 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "outDir": ".tmp/tests",
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "allowJs": true,
+    "jsx": "react-jsx"
+  },
+  "include": [
+    "tests/**/*.ts",
+    "src/lib/push/subscribe-handler.ts",
+    "src/lib/push/send-test.ts",
+    "src/lib/push/**/*.ts"
+  ],
+  "exclude": ["node_modules", ".next"]
+}

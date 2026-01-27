@@ -1,9 +1,13 @@
 import { NextResponse } from "next/server";
 import { createSupabaseServerClient } from "@/src/lib/supabase/server";
+import { upsertSubscription } from "@/src/lib/push/subscribe-handler";
 
 type Payload = {
   subscriptionId?: string;
   platform?: string;
+  deviceType?: string;
+  userAgent?: string;
+  isEnabled?: boolean;
 };
 
 export async function POST(request: Request) {
@@ -21,29 +25,11 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid JSON payload" }, { status: 400 });
   }
 
-  const subscriptionId = String(payload.subscriptionId ?? "").trim();
-  const platform = payload.platform ? String(payload.platform).trim() : "";
+  const result = await upsertSubscription(supabase, authData.user.id, payload);
 
-  if (!subscriptionId || !platform) {
-    return NextResponse.json(
-      { error: "subscriptionId and platform are required" },
-      { status: 400 }
-    );
+  if (!result.ok) {
+    return NextResponse.json({ error: result.error }, { status: result.status });
   }
 
-  const { error } = await supabase.from("push_subscriptions").upsert(
-    {
-      user_id: authData.user.id,
-      onesignal_subscription_id: subscriptionId,
-      platform,
-      updated_at: new Date().toISOString(),
-    },
-    { onConflict: "user_id,onesignal_subscription_id" }
-  );
-
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
-  }
-
-  return NextResponse.json({ ok: true });
+  return NextResponse.json({ ok: true }, { status: result.status });
 }

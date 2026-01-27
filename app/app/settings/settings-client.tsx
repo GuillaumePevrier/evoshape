@@ -8,9 +8,13 @@ import {
   getSubscriptionId,
   initOneSignal,
   isPushEnabled,
+  loginOneSignal,
   subscribeToPush,
+  logoutOneSignal,
   unsubscribeFromPush,
 } from "@/src/lib/onesignal";
+import { createSupabaseBrowserClient } from "@/src/lib/supabase/client";
+import { getNotificationSupport, getPushDeviceInfo } from "@/src/lib/push/device";
 
 type Status = "unknown" | "subscribed" | "unsubscribed";
 
@@ -31,6 +35,7 @@ export default function SettingsClient({
   );
   const [message, setMessage] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [testLoading, setTestLoading] = useState(false);
   const [support, setSupport] = useState<{
     notifications: boolean;
     serviceWorker: boolean;
@@ -38,6 +43,7 @@ export default function SettingsClient({
   const [permission, setPermission] = useState<
     NotificationPermission | "unsupported"
   >("unsupported");
+  const [userId, setUserId] = useState<string>("");
   const [diagnostics, setDiagnostics] = useState<{
     scriptPresent: boolean;
     oneSignalPresent: boolean;
@@ -71,16 +77,18 @@ export default function SettingsClient({
   }, [initOptions, isConfigured]);
 
   useEffect(() => {
-    const notificationsSupported = typeof Notification !== "undefined";
-    const serviceWorkerSupported =
-      typeof navigator !== "undefined" && "serviceWorker" in navigator;
+    const supportInfo = getNotificationSupport();
     setSupport({
-      notifications: notificationsSupported,
-      serviceWorker: serviceWorkerSupported,
+      notifications: supportInfo.notificationsSupported,
+      serviceWorker: supportInfo.serviceWorkerSupported,
     });
     setPermission(
-      notificationsSupported ? Notification.permission : "unsupported"
+      supportInfo.notificationsSupported ? Notification.permission : "unsupported"
     );
+    const supabase = createSupabaseBrowserClient();
+    supabase.auth.getUser().then(({ data }) => {
+      setUserId(data.user?.id ?? "");
+    });
   }, []);
 
   useEffect(() => {
@@ -194,6 +202,15 @@ export default function SettingsClient({
       return;
     }
 
+    if (userId) {
+      const loginResult = await loginOneSignal(userId, initOptions());
+      if (!loginResult.ok) {
+        setMessage("Impossible de lier le compte OneSignal.");
+        setLoading(false);
+        return;
+      }
+    }
+
     const requestResult = await subscribeToPush(initOptions());
     if (!requestResult.ok) {
       setMessage("Impossible d'activer les notifications.");
@@ -208,12 +225,16 @@ export default function SettingsClient({
       return;
     }
 
+    const deviceInfo = getPushDeviceInfo();
     const response = await fetch("/api/push/subscribe", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         subscriptionId,
-        platform: "web",
+        platform: deviceInfo.platform,
+        deviceType: deviceInfo.deviceType,
+        userAgent: deviceInfo.userAgent,
+        isEnabled: true,
       }),
     });
 
@@ -234,15 +255,92 @@ export default function SettingsClient({
   const handleDisable = async () => {
     setLoading(true);
     setMessage(null);
+    const subscriptionId = await getSubscriptionId(initOptions());
     const result = await unsubscribeFromPush(initOptions());
     if (!result.ok) {
       setMessage("Impossible de desactiver pour le moment.");
       setLoading(false);
       return;
     }
+    if (subscriptionId) {
+      const deviceInfo = getPushDeviceInfo();
+      await fetch("/api/push/subscribe", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          subscriptionId,
+          platform: deviceInfo.platform,
+          deviceType: deviceInfo.deviceType,
+          userAgent: deviceInfo.userAgent,
+          isEnabled: false,
+        }),
+      });
+    }
+    if (userId) {
+      await logoutOneSignal(initOptions());
+    }
     await refreshStatus();
     setMessage("Notifications desactivees.");
     setLoading(false);
+  };
+
+  const handleReset = async () => {
+    setLoading(true);
+    setMessage(null);
+    const initResult = await initOneSignal(initOptions());
+    if (!initResult.ok) {
+      setMessage("Impossible d'initialiser OneSignal.");
+      setLoading(false);
+      return;
+    }
+    if (userId) {
+      await loginOneSignal(userId, initOptions());
+    }
+    const subscriptionId = await getSubscriptionId(initOptions());
+    if (!subscriptionId) {
+      setMessage("Abonnement introuvable pour la relance.");
+      setLoading(false);
+      return;
+    }
+    const deviceInfo = getPushDeviceInfo();
+    await fetch("/api/push/subscribe", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        subscriptionId,
+        platform: deviceInfo.platform,
+        deviceType: deviceInfo.deviceType,
+        userAgent: deviceInfo.userAgent,
+        isEnabled: true,
+      }),
+    });
+    await refreshStatus();
+    setMessage("Liaison rafraichie.");
+    setLoading(false);
+  };
+
+  const handleSendTest = async () => {
+    setTestLoading(true);
+    setMessage(null);
+    const response = await fetch("/api/push/send-test", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        title: "EvoShape",
+        body: "Notification de test",
+        url: "/app/notifications",
+      }),
+    });
+    if (!response.ok) {
+      const payload = (await response.json().catch(() => null)) as {
+        error?: string;
+      } | null;
+      setMessage(payload?.error ?? "Echec envoi test.");
+      setTestLoading(false);
+      return;
+    }
+    setMessage("Notification de test envoyee.");
+    setTestLoading(false);
   };
 
   const statusLabel =
@@ -253,6 +351,7 @@ export default function SettingsClient({
         : "Inconnu";
   const isSupported = support.notifications && support.serviceWorker;
   const isPermissionDenied = permission === "denied";
+  const supportInfo = getNotificationSupport();
 
   return (
     <div className="space-y-6">
@@ -299,6 +398,13 @@ export default function SettingsClient({
           </p>
         ) : null}
 
+        {supportInfo.isIos && supportInfo.isSafari ? (
+          <p className="text-sm text-[var(--muted)]">
+            Sur iOS Safari, les notifications web exigent une PWA installee
+            (iOS 16.4+) et ne fonctionnent pas en navigation privee.
+          </p>
+        ) : null}
+
         {isPermissionDenied ? (
           <p className="text-sm text-[var(--muted)]">
             Les notifications sont bloquees pour ce site. Dans ton navigateur,
@@ -325,6 +431,20 @@ export default function SettingsClient({
               {loading ? "Activation..." : "Activer"}
             </Button>
           )}
+          <Button
+            variant="ghost"
+            onClick={handleReset}
+            disabled={!isConfigured || loading || !isSupported}
+          >
+            Reinitialiser la liaison
+          </Button>
+          <Button
+            variant="soft"
+            onClick={handleSendTest}
+            disabled={!isConfigured || testLoading || !isSupported}
+          >
+            {testLoading ? "Envoi..." : "Envoyer un test"}
+          </Button>
         </div>
 
         {message ? (

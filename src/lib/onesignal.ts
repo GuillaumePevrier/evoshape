@@ -35,6 +35,8 @@ type OneSignalInitOptions = {
 
 type OneSignalSDK = {
   init?: (options: OneSignalInitOptions) => Promise<void> | void;
+  login?: (externalUserId: string) => Promise<void> | void;
+  logout?: () => Promise<void> | void;
   Notifications?: {
     requestPermission?: () => Promise<void>;
     setSubscription?: (value: boolean) => Promise<void>;
@@ -101,6 +103,15 @@ const buildInitOptions = (options?: Partial<OneSignalInitOptions>) => {
 };
 
 let initializedAppId: string | null = null;
+const debugEnabled = process.env.NEXT_PUBLIC_ONESIGNAL_DEBUG === "1";
+
+const logDebug = (...args: unknown[]) => {
+  if (!debugEnabled) {
+    return;
+  }
+  // eslint-disable-next-line no-console
+  console.debug("[OneSignal]", ...args);
+};
 
 export const initOneSignal = async (
   options?: Partial<OneSignalInitOptions>
@@ -151,15 +162,18 @@ export const initOneSignal = async (
               await OneSignal.init(initOptions);
               initialized = true;
               initializedAppId = initOptions.appId;
+              logDebug("init ok", initOptions.appId);
               clearTimeout(timeoutId);
               finalize({ ok: true });
             } catch {
+              logDebug("init failed");
               clearTimeout(timeoutId);
               finalize({ ok: false, reason: "sdk-init-failed" });
             }
           });
         });
       } catch {
+        logDebug("sdk load failed");
         return { ok: false, reason: "sdk-load-failed" };
       }
     })();
@@ -187,6 +201,7 @@ export const subscribeToPush = async (options?: Partial<OneSignalInitOptions>) =
     await OneSignal.User.PushSubscription.optIn();
   }
 
+  logDebug("subscribed");
   return { ok: true };
 };
 
@@ -209,6 +224,46 @@ export const unsubscribeFromPush = async (
     await OneSignal.Notifications.setSubscription(false);
   }
 
+  logDebug("unsubscribed");
+  return { ok: true };
+};
+
+export const loginOneSignal = async (
+  externalUserId: string,
+  options?: Partial<OneSignalInitOptions>
+) => {
+  const initResult = await initOneSignal(options);
+  if (!initResult.ok) {
+    return initResult;
+  }
+
+  const OneSignal = getOneSignalInstance();
+  if (!OneSignal?.login) {
+    logDebug("login unavailable");
+    return { ok: false, reason: "login-unavailable" };
+  }
+
+  await OneSignal.login(externalUserId);
+  logDebug("login ok", externalUserId);
+  return { ok: true };
+};
+
+export const logoutOneSignal = async (
+  options?: Partial<OneSignalInitOptions>
+) => {
+  const initResult = await initOneSignal(options);
+  if (!initResult.ok) {
+    return initResult;
+  }
+
+  const OneSignal = getOneSignalInstance();
+  if (!OneSignal?.logout) {
+    logDebug("logout unavailable");
+    return { ok: false, reason: "logout-unavailable" };
+  }
+
+  await OneSignal.logout();
+  logDebug("logout ok");
   return { ok: true };
 };
 
