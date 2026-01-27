@@ -31,6 +31,10 @@ type OneSignalInitOptions = {
   notifyButton?: {
     enable: boolean;
   };
+  serviceWorkerPath?: string;
+  serviceWorkerParam?: {
+    scope?: string;
+  };
 };
 
 type OneSignalSDK = {
@@ -97,6 +101,12 @@ const buildInitOptions = (options?: Partial<OneSignalInitOptions>) => {
   }
   if (options?.notifyButton) {
     initOptions.notifyButton = options.notifyButton;
+  }
+  if (options?.serviceWorkerPath) {
+    initOptions.serviceWorkerPath = options.serviceWorkerPath;
+  }
+  if (options?.serviceWorkerParam) {
+    initOptions.serviceWorkerParam = options.serviceWorkerParam;
   }
 
   return initOptions;

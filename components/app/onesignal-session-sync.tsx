@@ -25,19 +25,33 @@ export function OneSignalSessionSync({
         appId,
         safari_web_id: safariWebId || undefined,
         notifyButton: { enable: true },
+        serviceWorkerPath: "/sw.js",
+        serviceWorkerParam: { scope: "/" },
       });
       if (!initResult.ok) {
         return;
       }
 
-      await loginOneSignal(userId, { appId, safari_web_id: safariWebId });
-      const enabled = await isPushEnabled({ appId, safari_web_id: safariWebId });
+      await loginOneSignal(userId, {
+        appId,
+        safari_web_id: safariWebId,
+        serviceWorkerPath: "/sw.js",
+        serviceWorkerParam: { scope: "/" },
+      });
+      const enabled = await isPushEnabled({
+        appId,
+        safari_web_id: safariWebId,
+        serviceWorkerPath: "/sw.js",
+        serviceWorkerParam: { scope: "/" },
+      });
       if (!enabled) {
         return;
       }
       const subscriptionId = await getSubscriptionId({
         appId,
         safari_web_id: safariWebId,
+        serviceWorkerPath: "/sw.js",
+        serviceWorkerParam: { scope: "/" },
       });
       if (!subscriptionId) {
         return;
