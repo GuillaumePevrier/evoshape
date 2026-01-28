@@ -23,6 +23,7 @@ Renseigner au minimum:
 - `SUPABASE_SERVICE_ROLE_KEY` (server only)
 - `NEXT_PUBLIC_ONESIGNAL_APP_ID` (optionnel)
 - `ONESIGNAL_REST_API_KEY` (server only, requis pour l'envoi test)
+- `USDA_FDC_API_KEY` (server only, requis pour la recherche alimentaire)
 
 3) Appliquer les migrations Supabase:
 ```bash

@@ -12,6 +12,7 @@ import { createSupabaseBrowserClient } from "@/src/lib/supabase/client";
 import { getISODate } from "@/lib/date";
 import { cn } from "@/lib/cn";
 import { Sparkline } from "@/components/ui/sparkline";
+import { ACTIVITY_LIBRARY, estimateActivityCalories } from "@/lib/activity";
 
 type MealLog = {
   id: number;
@@ -58,6 +59,23 @@ type CalorieGaugeClientProps = {
 };
 
 type SheetView = "menu" | "meal" | "activity" | "weight" | "reports";
+
+type FoodSearchItem = {
+  fdcId: number;
+  description: string;
+  brandOwner: string | null;
+  dataType: string | null;
+};
+
+type FoodDetails = {
+  source: "fdc" | "off";
+  description: string;
+  brandOwner: string | null;
+  caloriesPer100g: number | null;
+  caloriesPerServing: number | null;
+  servingSize: number | null;
+  servingSizeUnit: string | null;
+};
 
 type WheelAction = {
   id: SheetView | "profile" | "notifications" | "settings";
@@ -199,8 +217,27 @@ export default function CalorieGaugeClient({
     useState<WeightEntry[]>(weightEntries);
   const [mealName, setMealName] = useState("");
   const [mealCalories, setMealCalories] = useState("");
+  const [mealCaloriesMode, setMealCaloriesMode] = useState<"auto" | "manual">(
+    "auto"
+  );
+  const [mealQuantity, setMealQuantity] = useState("100");
+  const [foodQuery, setFoodQuery] = useState("");
+  const [foodResults, setFoodResults] = useState<FoodSearchItem[]>([]);
+  const [foodLoading, setFoodLoading] = useState(false);
+  const [foodError, setFoodError] = useState<string | null>(null);
+  const [selectedFood, setSelectedFood] = useState<FoodDetails | null>(null);
+  const [selectedFoodLoading, setSelectedFoodLoading] = useState(false);
+  const [barcodeValue, setBarcodeValue] = useState("");
+  const [barcodeLoading, setBarcodeLoading] = useState(false);
   const [activityType, setActivityType] = useState("");
   const [activityCalories, setActivityCalories] = useState("");
+  const [activityCaloriesMode, setActivityCaloriesMode] = useState<
+    "auto" | "manual"
+  >("auto");
+  const [activityDuration, setActivityDuration] = useState("30");
+  const [selectedActivityId, setSelectedActivityId] = useState<string | null>(
+    null
+  );
   const [weightValue, setWeightValue] = useState("");
   const [feedback, setFeedback] = useState<string | null>(null);
   const [clientError, setClientError] = useState<string | null>(null);
@@ -264,6 +301,23 @@ export default function CalorieGaugeClient({
         ? weightEntriesState[weightEntriesState.length - 1]
         : latestWeight,
     [latestWeight, weightEntriesState]
+  );
+
+  const weightForActivity = useMemo(() => {
+    const raw = latestWeightEntry?.weight_kg ?? null;
+    const parsed = raw ? Number(raw) : NaN;
+    return Number.isFinite(parsed) ? parsed : 70;
+  }, [latestWeightEntry]);
+
+  const usingWeightFallback = useMemo(() => {
+    const raw = latestWeightEntry?.weight_kg ?? null;
+    const parsed = raw ? Number(raw) : NaN;
+    return !Number.isFinite(parsed);
+  }, [latestWeightEntry]);
+
+  const selectedActivity = useMemo(
+    () => ACTIVITY_LIBRARY.find((item) => item.id === selectedActivityId) ?? null,
+    [selectedActivityId]
   );
 
   const targetData = useMemo(
@@ -334,6 +388,103 @@ export default function CalorieGaugeClient({
     return last - first;
   }, [reportRange, weightEntriesState]);
 
+  const computeMealCalories = (
+    food: FoodDetails | null,
+    quantityValue: string
+  ) => {
+    if (!food) return null;
+    const quantity = Number(quantityValue);
+    if (!Number.isFinite(quantity) || quantity <= 0) {
+      return null;
+    }
+    if (food.caloriesPer100g !== null && Number.isFinite(food.caloriesPer100g)) {
+      return (food.caloriesPer100g / 100) * quantity;
+    }
+    if (
+      food.caloriesPerServing !== null &&
+      Number.isFinite(food.caloriesPerServing) &&
+      food.servingSize &&
+      food.servingSizeUnit?.toLowerCase() === "g"
+    ) {
+      return (food.caloriesPerServing / food.servingSize) * quantity;
+    }
+    return null;
+  };
+
+  useEffect(() => {
+    setFoodError(null);
+    if (!foodQuery || foodQuery.trim().length < 2) {
+      setFoodResults([]);
+      return;
+    }
+
+    const controller = new AbortController();
+    const timeout = window.setTimeout(async () => {
+      setFoodLoading(true);
+      try {
+        const response = await fetch(
+          `/api/food/search?q=${encodeURIComponent(foodQuery.trim())}&limit=8`,
+          { signal: controller.signal }
+        );
+        if (!response.ok) {
+          setFoodError("Recherche indisponible.");
+          setFoodResults([]);
+          return;
+        }
+        const data = (await response.json()) as { foods: FoodSearchItem[] };
+        setFoodResults(data.foods ?? []);
+      } catch (error) {
+        if (!(error instanceof DOMException && error.name === "AbortError")) {
+          setFoodError("Recherche indisponible.");
+        }
+      } finally {
+        setFoodLoading(false);
+      }
+    }, 350);
+
+    return () => {
+      controller.abort();
+      window.clearTimeout(timeout);
+    };
+  }, [foodQuery]);
+
+  useEffect(() => {
+    if (selectedFood && mealCaloriesMode === "auto") {
+      const computed = computeMealCalories(selectedFood, mealQuantity);
+      if (computed !== null) {
+        setMealCalories(Math.round(computed).toString());
+      }
+    }
+  }, [selectedFood, mealQuantity, mealCaloriesMode]);
+
+  useEffect(() => {
+    if (selectedActivity) {
+      setActivityType(selectedActivity.label);
+    }
+  }, [selectedActivity]);
+
+  useEffect(() => {
+    if (selectedActivity && activityCaloriesMode === "auto") {
+      const minutes = Number(activityDuration);
+      if (!Number.isFinite(minutes) || minutes <= 0) {
+        return;
+      }
+      const computed = estimateActivityCalories(
+        selectedActivity.met,
+        weightForActivity,
+        minutes
+      );
+      if (Number.isFinite(computed)) {
+        setActivityCalories(Math.round(computed).toString());
+      }
+    }
+  }, [
+    selectedActivity,
+    activityDuration,
+    activityCaloriesMode,
+    weightForActivity,
+  ]);
+
   const refreshMeals = async () => {
     const supabase = createSupabaseBrowserClient();
     const { data } = await supabase
@@ -364,6 +515,53 @@ export default function CalorieGaugeClient({
       .gte("recorded_at", getISODate(new Date(Date.now() - 29 * 86400000)))
       .order("recorded_at", { ascending: true });
     setWeightEntriesState((data ?? []) as WeightEntry[]);
+  };
+
+  const fetchFoodDetails = async (fdcId: number) => {
+    setSelectedFoodLoading(true);
+    setFoodError(null);
+    try {
+      const response = await fetch(`/api/food/${fdcId}`);
+      if (!response.ok) {
+        setFoodError("Impossible de charger cet aliment.");
+        setSelectedFood(null);
+        return;
+      }
+      const data = (await response.json()) as FoodDetails;
+      setSelectedFood(data);
+      setMealCaloriesMode("auto");
+      setMealQuantity("100");
+      setMealName((prev) => (prev ? prev : data.description ?? ""));
+    } catch {
+      setFoodError("Impossible de charger cet aliment.");
+      setSelectedFood(null);
+    } finally {
+      setSelectedFoodLoading(false);
+    }
+  };
+
+  const handleBarcodeLookup = async () => {
+    if (!barcodeValue.trim()) return;
+    setBarcodeLoading(true);
+    setFoodError(null);
+    try {
+      const response = await fetch(
+        `/api/food/barcode?code=${encodeURIComponent(barcodeValue.trim())}`
+      );
+      if (!response.ok) {
+        setFoodError("Produit introuvable.");
+        return;
+      }
+      const data = (await response.json()) as FoodDetails;
+      setSelectedFood(data);
+      setMealCaloriesMode("auto");
+      setMealQuantity("100");
+      setMealName((prev) => (prev ? prev : data.description ?? ""));
+    } catch {
+      setFoodError("Produit introuvable.");
+    } finally {
+      setBarcodeLoading(false);
+    }
   };
 
   const openSheet = () => {
@@ -516,6 +714,12 @@ export default function CalorieGaugeClient({
 
     setMealName("");
     setMealCalories("");
+    setMealQuantity("100");
+    setMealCaloriesMode("auto");
+    setFoodQuery("");
+    setFoodResults([]);
+    setSelectedFood(null);
+    setBarcodeValue("");
     setFeedback("Repas ajoute.");
     await refreshMeals();
     setSaving(false);
@@ -541,12 +745,14 @@ export default function CalorieGaugeClient({
 
     setSaving(true);
     const supabase = createSupabaseBrowserClient();
+    const durationValue = Number(activityDuration);
+    const durationMin = Number.isFinite(durationValue) ? Math.round(durationValue) : 0;
     const { error: insertError } = await supabase.from("activity_logs").insert({
       user_id: userId,
       recorded_at: getISODate(),
       activity_type:
         payload?.type ?? (activityType.trim() ? activityType.trim() : "Activite"),
-      duration_min: 0,
+      duration_min: durationMin,
       calories_burned: Math.round(caloriesValue),
     });
 
@@ -558,6 +764,9 @@ export default function CalorieGaugeClient({
 
     setActivityType("");
     setActivityCalories("");
+    setActivityDuration("30");
+    setActivityCaloriesMode("auto");
+    setSelectedActivityId(null);
     setFeedback("Activite ajoutee.");
     await refreshActivities();
     setSaving(false);
@@ -890,18 +1099,155 @@ export default function CalorieGaugeClient({
         {sheetView === "meal" ? (
           <div className="fade-slide-in px-5 pb-5 pt-4 space-y-3">
             <Input
+              placeholder="Rechercher un aliment"
+              value={foodQuery}
+              onChange={(event) => setFoodQuery(event.target.value)}
+            />
+            {foodLoading ? (
+              <p className="text-xs text-[var(--muted)]">Recherche...</p>
+            ) : null}
+            {foodError ? (
+              <p className="text-xs text-red-600">{foodError}</p>
+            ) : null}
+            {foodResults.length > 0 ? (
+              <div className="max-h-32 space-y-2 overflow-y-auto rounded-2xl border border-[var(--border)] bg-white/70 p-2">
+                {foodResults.map((item) => (
+                  <button
+                    key={item.fdcId}
+                    type="button"
+                    className="flex w-full flex-col items-start gap-1 rounded-xl px-2 py-2 text-left text-sm transition hover:bg-white"
+                    onClick={() => fetchFoodDetails(item.fdcId)}
+                  >
+                    <span className="font-semibold text-[var(--foreground)]">
+                      {item.description}
+                    </span>
+                    {item.brandOwner ? (
+                      <span className="text-xs text-[var(--muted)]">
+                        {item.brandOwner}
+                      </span>
+                    ) : null}
+                  </button>
+                ))}
+              </div>
+            ) : null}
+
+            <div className="flex gap-2">
+              <Input
+                placeholder="Code-barres (optionnel)"
+                inputMode="numeric"
+                value={barcodeValue}
+                onChange={(event) => setBarcodeValue(event.target.value)}
+              />
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                disabled={barcodeLoading}
+                onClick={handleBarcodeLookup}
+              >
+                {barcodeLoading ? "..." : "OK"}
+              </Button>
+            </div>
+
+            {selectedFoodLoading ? (
+              <p className="text-xs text-[var(--muted)]">
+                Chargement de l&apos;aliment...
+              </p>
+            ) : null}
+
+            {selectedFood ? (
+              <div className="rounded-2xl border border-[var(--border)] bg-white/70 px-4 py-3 space-y-2">
+                <div className="flex items-start justify-between gap-2">
+                  <div>
+                    <p className="text-sm font-semibold text-[var(--foreground)]">
+                      {selectedFood.description}
+                    </p>
+                    {selectedFood.brandOwner ? (
+                      <p className="text-xs text-[var(--muted)]">
+                        {selectedFood.brandOwner}
+                      </p>
+                    ) : null}
+                  </div>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => {
+                      setSelectedFood(null);
+                      setMealCaloriesMode("manual");
+                    }}
+                  >
+                    Effacer
+                  </Button>
+                </div>
+                <div className="flex flex-wrap gap-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--muted)]">
+                  {selectedFood.caloriesPer100g !== null ? (
+                    <span>
+                      {Math.round(selectedFood.caloriesPer100g)} kcal / 100g
+                    </span>
+                  ) : null}
+                  {selectedFood.caloriesPerServing !== null &&
+                  selectedFood.servingSize ? (
+                    <span>
+                      {Math.round(selectedFood.caloriesPerServing)} kcal /{" "}
+                      {selectedFood.servingSize}
+                      {selectedFood.servingSizeUnit ?? ""}
+                    </span>
+                  ) : null}
+                </div>
+              </div>
+            ) : null}
+
+            <Input
               placeholder="Nom (optionnel)"
               value={mealName}
               onChange={(event) => setMealName(event.target.value)}
             />
+            {selectedFood ? (
+              <Input
+                placeholder="Quantite (g)"
+                inputMode="numeric"
+                type="number"
+                min={0}
+                value={mealQuantity}
+                onChange={(event) => setMealQuantity(event.target.value)}
+              />
+            ) : null}
             <Input
               placeholder="Calories"
               inputMode="numeric"
               type="number"
               min={0}
               value={mealCalories}
-              onChange={(event) => setMealCalories(event.target.value)}
+              readOnly={selectedFood ? mealCaloriesMode === "auto" : false}
+              onChange={(event) => {
+                setMealCalories(event.target.value);
+                setMealCaloriesMode("manual");
+              }}
             />
+            {selectedFood ? (
+              <div className="flex items-center justify-between text-xs text-[var(--muted)]">
+                <span>
+                  {mealCaloriesMode === "auto"
+                    ? "Calories calculees automatiquement"
+                    : "Saisie manuelle active"}
+                </span>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  onClick={() =>
+                    setMealCaloriesMode((mode) =>
+                      mode === "auto" ? "manual" : "auto"
+                    )
+                  }
+                >
+                  {mealCaloriesMode === "auto"
+                    ? "Modifier"
+                    : "Auto"}
+                </Button>
+              </div>
+            ) : null}
             <div className="flex flex-wrap gap-2">
               {QUICK_MEALS.map((calories) => (
                 <Button
@@ -932,10 +1278,43 @@ export default function CalorieGaugeClient({
 
         {sheetView === "activity" ? (
           <div className="fade-slide-in px-5 pb-5 pt-4 space-y-3">
+            <div className="space-y-2">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--muted)]">
+                Activites
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {ACTIVITY_LIBRARY.map((activity) => (
+                  <button
+                    key={activity.id}
+                    type="button"
+                    className={cn(
+                      "rounded-full border px-3 py-1 text-xs font-semibold transition",
+                      selectedActivityId === activity.id
+                        ? "border-[var(--accent)] bg-[var(--accent-soft)] text-[var(--accent-strong)]"
+                        : "border-[var(--border)] bg-white/70 text-[var(--foreground)]"
+                    )}
+                    onClick={() => {
+                      setSelectedActivityId(activity.id);
+                      setActivityCaloriesMode("auto");
+                    }}
+                  >
+                    {activity.label}
+                  </button>
+                ))}
+              </div>
+            </div>
             <Input
               placeholder="Nom (optionnel)"
               value={activityType}
               onChange={(event) => setActivityType(event.target.value)}
+            />
+            <Input
+              placeholder="Duree (minutes)"
+              inputMode="numeric"
+              type="number"
+              min={0}
+              value={activityDuration}
+              onChange={(event) => setActivityDuration(event.target.value)}
             />
             <Input
               placeholder="Calories brulees"
@@ -943,8 +1322,38 @@ export default function CalorieGaugeClient({
               type="number"
               min={0}
               value={activityCalories}
-              onChange={(event) => setActivityCalories(event.target.value)}
+              readOnly={selectedActivity ? activityCaloriesMode === "auto" : false}
+              onChange={(event) => {
+                setActivityCalories(event.target.value);
+                setActivityCaloriesMode("manual");
+              }}
             />
+            {selectedActivity ? (
+              <div className="flex items-center justify-between text-xs text-[var(--muted)]">
+                <span>
+                  {activityCaloriesMode === "auto"
+                    ? `Calories estimees (MET ${selectedActivity.met})`
+                    : "Saisie manuelle active"}
+                </span>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  onClick={() =>
+                    setActivityCaloriesMode((mode) =>
+                      mode === "auto" ? "manual" : "auto"
+                    )
+                  }
+                >
+                  {activityCaloriesMode === "auto" ? "Modifier" : "Auto"}
+                </Button>
+              </div>
+            ) : null}
+            {usingWeightFallback ? (
+              <p className="text-xs text-[var(--muted)]">
+                Poids manquant, calcul base sur 70 kg.
+              </p>
+            ) : null}
             <div className="flex flex-wrap gap-2">
               {QUICK_ACTIVITIES.map((activity) => (
                 <Button
