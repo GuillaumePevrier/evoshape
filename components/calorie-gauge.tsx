@@ -9,6 +9,7 @@ type CalorieGaugeProps = {
   size?: number;
   showLegend?: boolean;
   showTargetTick?: boolean;
+  showTargetValue?: boolean;
 };
 
 export function CalorieGauge({
@@ -19,10 +20,12 @@ export function CalorieGauge({
   size = 220,
   showLegend = true,
   showTargetTick = true,
+  showTargetValue = true,
 }: CalorieGaugeProps) {
   const safeConsumed = Number.isFinite(consumed) ? consumed : 0;
   const safeBurned = Number.isFinite(burned) ? burned : 0;
   const safeTarget = Number.isFinite(target) && target > 0 ? target : 1;
+  const targetValue = Number.isFinite(target) ? Math.round(target) : 0;
   const consumedProgress = clamp(safeConsumed / safeTarget, 0, 1);
   const burnedProgress = clamp(safeBurned / safeTarget, 0, 1);
 
@@ -110,11 +113,18 @@ export function CalorieGauge({
           <p className="text-xs text-[var(--muted)]">kcal</p>
         </div>
 
-        {showTargetTick ? (
+        {showTargetTick || showTargetValue ? (
           <div className="pointer-events-none absolute left-1/2 top-2 flex -translate-x-1/2 flex-col items-center gap-1">
-            <span className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[var(--accent-strong)]">
-              Objectif
-            </span>
+            {showTargetTick ? (
+              <span className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[var(--accent-strong)]">
+                Objectif
+              </span>
+            ) : null}
+            {showTargetValue ? (
+              <span className="rounded-full border border-[var(--border)] bg-white/80 px-2 py-0.5 text-[10px] font-semibold text-[var(--foreground)]">
+                {targetValue} kcal
+              </span>
+            ) : null}
           </div>
         ) : null}
       </div>

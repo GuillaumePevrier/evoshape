@@ -1002,15 +1002,15 @@ export default function CalorieGaugeClient({
   );
 
   return (
-    <div className="relative space-y-5 pb-28">
-      <header className="flex items-center justify-between">
+    <div className="relative space-y-4 pb-24">
+      <header className="flex items-center justify-between gap-4">
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--muted)]">
             Aujourd&apos;hui
           </p>
           <p className="mt-1 text-sm text-[var(--muted)]">{todayLabel}</p>
         </div>
-        <div className="flex flex-col items-end gap-3 text-right">
+        <div className="flex flex-col items-end gap-2 text-right">
           <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--muted)]">
             Objectif ajuste
           </p>
@@ -1018,18 +1018,29 @@ export default function CalorieGaugeClient({
             {targetData.adjustedTarget.toFixed(0)} kcal
           </p>
           <p className="text-[10px] text-[var(--muted)]">avec le sport</p>
-          <div className="rounded-2xl border border-[var(--border)] bg-white/70 px-2 py-1">
+          <button
+            type="button"
+            className="rounded-2xl border border-[var(--border)] bg-white/70 px-2 py-1 text-left transition hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]"
+            onClick={() =>
+              setReportRange((current) => (current === "7" ? "30" : "7"))
+            }
+            aria-label="Basculer la tendance 7 ou 30 jours"
+          >
+            <div className="flex items-center justify-between text-[10px] font-semibold uppercase tracking-[0.2em] text-[var(--muted)]">
+              <span>Tendance</span>
+              <span>{reportRange}j</span>
+            </div>
             <Sparkline
-              values={netSeries7}
+              values={reportSeries}
               width={120}
               height={36}
-              id="net-mini"
+              id={`net-mini-${reportRange}`}
               className="text-[var(--accent)]"
               showArea={false}
               showBaseline={false}
               showLastDot={false}
             />
-          </div>
+          </button>
         </div>
       </header>
 
@@ -1045,7 +1056,7 @@ export default function CalorieGaugeClient({
         </Card>
       ) : null}
 
-      <Card className="space-y-4">
+      <Card className="space-y-3">
         <div className="flex flex-col items-center gap-4">
           <CalorieGauge
             consumed={totals.mealTotal}
@@ -1103,7 +1114,7 @@ export default function CalorieGaugeClient({
         </Card>
       ) : null}
 
-      <Card className="space-y-4">
+      <Card className="space-y-3">
         <div className="w-full rounded-2xl border border-[var(--border)] bg-white/70 px-4 py-3">
           <div className="flex items-center justify-between gap-3">
             <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--muted)]">
@@ -1136,8 +1147,8 @@ export default function CalorieGaugeClient({
               className="text-[var(--accent)]"
             />
           </div>
-          <div className="mt-3 grid grid-cols-2 gap-3 text-sm">
-            <div className="rounded-2xl border border-[var(--border)] bg-white/70 px-3 py-2">
+            <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
+              <div className="rounded-2xl border border-[var(--border)] bg-white/70 px-3 py-2">
               <div className="flex items-center justify-between">
                 <p className="text-[10px] uppercase tracking-[0.2em] text-[var(--muted)]">
                   Net moyen
@@ -1157,7 +1168,7 @@ export default function CalorieGaugeClient({
                 {reportStats.average.toFixed(0)} kcal
               </p>
             </div>
-            <div className="rounded-2xl border border-[var(--border)] bg-white/70 px-3 py-2">
+              <div className="rounded-2xl border border-[var(--border)] bg-white/70 px-3 py-2">
               <div className="flex items-center justify-between">
                 <p className="text-[10px] uppercase tracking-[0.2em] text-[var(--muted)]">
                   Total net
@@ -1170,7 +1181,7 @@ export default function CalorieGaugeClient({
                 {reportStats.total.toFixed(0)} kcal
               </p>
             </div>
-            <div className="rounded-2xl border border-[var(--border)] bg-white/70 px-3 py-2">
+              <div className="rounded-2xl border border-[var(--border)] bg-white/70 px-3 py-2">
               <div className="flex items-center justify-between">
                 <p className="text-[10px] uppercase tracking-[0.2em] text-[var(--muted)]">
                   Mini / Maxi
@@ -1183,7 +1194,7 @@ export default function CalorieGaugeClient({
                 {reportStats.min.toFixed(0)} / {reportStats.max.toFixed(0)}
               </p>
             </div>
-            <div className="rounded-2xl border border-[var(--border)] bg-white/70 px-3 py-2">
+              <div className="rounded-2xl border border-[var(--border)] bg-white/70 px-3 py-2">
               <div className="flex items-center justify-between">
                 <p className="text-[10px] uppercase tracking-[0.2em] text-[var(--muted)]">
                   Poids
@@ -1219,7 +1230,7 @@ export default function CalorieGaugeClient({
         </div>
       </Card>
 
-      <Card className="grid gap-3 sm:grid-cols-2">
+      <Card className="grid gap-2 sm:grid-cols-2">
         {[
           {
             label: "Objectif",
@@ -1242,18 +1253,18 @@ export default function CalorieGaugeClient({
             tone: delta > 0 ? "text-red-600" : "text-emerald-600",
           },
         ].map((item) => (
-          <div
-            key={item.label}
-            className="rounded-2xl border border-[var(--border)] bg-white/70 px-4 py-3"
-          >
-            <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--muted)]">
-              {item.label}
-            </p>
-            <p className={cn("mt-2 text-lg font-semibold", item.tone)}>
-              {item.value}
-            </p>
-          </div>
-        ))}
+            <div
+              key={item.label}
+              className="rounded-2xl border border-[var(--border)] bg-white/70 px-3 py-2.5"
+            >
+              <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--muted)]">
+                {item.label}
+              </p>
+              <p className={cn("mt-2 text-lg font-semibold", item.tone)}>
+                {item.value}
+              </p>
+            </div>
+          ))}
       </Card>
 
       <Card className="space-y-2">
