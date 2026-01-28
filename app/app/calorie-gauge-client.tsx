@@ -675,6 +675,21 @@ export default function CalorieGaugeClient({
                     </Button>
                   ))}
               </div>
+              {wheelActions.map((action) => (
+                <button
+                  key={action.id}
+                  type="button"
+                  className="flex min-w-[150px] snap-center flex-col items-start gap-1 rounded-2xl border border-[var(--border)] bg-white/70 px-3 py-3 text-left text-sm font-semibold text-[var(--foreground)] transition duration-200 hover:-translate-y-0.5 hover:bg-white hover:shadow-sm"
+                  onClick={() => handleAction(action)}
+                >
+                  <span>{action.label}</span>
+                  {action.helper ? (
+                    <span className="text-xs font-medium text-[var(--muted)]">
+                      {action.helper}
+                    </span>
+                  ) : null}
+                </button>
+              ))}
             </div>
 
             <div className="grid gap-3">
