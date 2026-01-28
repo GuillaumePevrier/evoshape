@@ -59,17 +59,10 @@ type CalorieGaugeClientProps = {
 
 type SheetView = "menu" | "meal" | "activity" | "weight" | "reports";
 
-const viewModeDescriptions: Record<"today" | "summary" | "focus", string> = {
-  today: "Vue complete avec jauge, stats et actions rapides.",
-  summary: "Resume compact pour verifier le net rapidement.",
-  focus: "Mode minimal pour se concentrer sur l'essentiel.",
-};
-
 type WheelAction = {
   id: SheetView | "profile" | "notifications" | "settings";
   label: string;
   helper?: string;
-  icon?: string;
   type: "sheet" | "route";
   href?: string;
 };
@@ -89,35 +82,30 @@ const wheelActions: WheelAction[] = [
     id: "meal",
     label: "Ajouter repas",
     helper: "Calories + nom",
-    icon: "🍽️",
     type: "sheet",
   },
   {
     id: "activity",
     label: "Ajouter activite",
     helper: "Calories brulees",
-    icon: "🏃",
     type: "sheet",
   },
   {
     id: "weight",
     label: "Ajouter poids",
     helper: "Poids du jour",
-    icon: "⚖️",
     type: "sheet",
   },
   {
     id: "reports",
     label: "Rapports",
     helper: "7 & 30 jours",
-    icon: "📊",
     type: "sheet",
   },
   {
     id: "profile",
     label: "Profil",
     helper: "Objectifs & profil",
-    icon: "👤",
     type: "route",
     href: "/app/profile",
   },
@@ -125,7 +113,6 @@ const wheelActions: WheelAction[] = [
     id: "settings",
     label: "Parametres",
     helper: "Preferences",
-    icon: "⚙️",
     type: "route",
     href: "/app/settings",
   },
@@ -133,7 +120,6 @@ const wheelActions: WheelAction[] = [
     id: "notifications",
     label: "Notifications",
     helper: "Messages & alertes",
-    icon: "🔔",
     type: "route",
     href: "/app/notifications",
   },
@@ -215,9 +201,12 @@ export default function CalorieGaugeClient({
   const [sheetOffset, setSheetOffset] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
   const [reportRange, setReportRange] = useState<"7" | "30">("7");
-  const [viewMode, setViewMode] = useState<"today" | "summary" | "focus">("today");
+  const [activeActionId, setActiveActionId] = useState<string | null>(null);
 
   const dragStart = useRef<number | null>(null);
+  const openerRef = useRef<HTMLButtonElement | null>(null);
+  const sheetRef = useRef<HTMLDivElement | null>(null);
+  const lastFocusedRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
     setMounted(true);
@@ -253,31 +242,11 @@ export default function CalorieGaugeClient({
   const delta = totals.net - targetData.adjustedTarget;
   const weightKg = delta / 7700;
   const weightG = Math.round(weightKg * 1000);
-  const remaining = targetData.adjustedTarget - totals.net;
-  const progressValue =
-    targetData.adjustedTarget > 0
-      ? Math.min(Math.max(totals.net / targetData.adjustedTarget, 0), 1)
-      : 0;
-  const progressPercent = Math.round(progressValue * 100);
-  const statusBadge =
-    remaining >= 0
-      ? {
-          label: "Dans l'objectif",
-          className: "bg-emerald-100 text-emerald-700",
-        }
-      : {
-          label: "Au-dessus",
-          className: "bg-red-100 text-red-700",
-        };
-
   const todayLabel = new Intl.DateTimeFormat("fr-FR", {
     day: "numeric",
     month: "short",
   }).format(new Date());
 
-  const showGauge = viewMode !== "summary";
-  const showStats = viewMode === "today";
-  const showWeightEquivalent = viewMode !== "focus";
   const hasLogs = mealLogs.length > 0 || activityLogs.length > 0;
 
   const reportSeries = reportRange === "7" ? netSeries7 : netSeries30;
@@ -375,8 +344,65 @@ export default function CalorieGaugeClient({
     setSheetView("menu");
     setSheetOffset(0);
     setIsDragging(false);
+    setActiveActionId(null);
     window.setTimeout(() => setSheetOpen(false), 220);
   };
+
+  useEffect(() => {
+    if (!sheetOpen) {
+      return;
+    }
+
+    lastFocusedRef.current = document.activeElement as HTMLElement | null;
+    const body = document.body;
+    const previousOverflow = body.style.overflow;
+    body.style.overflow = "hidden";
+
+    const focusFirst = () => {
+      const focusables = sheetRef.current?.querySelectorAll<HTMLElement>(
+        'a[href], button:not([disabled]), textarea, input, select, [tabindex]:not([tabindex="-1"])'
+      );
+      focusables?.[0]?.focus();
+    };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        closeSheet();
+        return;
+      }
+      if (event.key !== "Tab") {
+        return;
+      }
+      const focusables = sheetRef.current?.querySelectorAll<HTMLElement>(
+        'a[href], button:not([disabled]), textarea, input, select, [tabindex]:not([tabindex="-1"])'
+      );
+      if (!focusables || focusables.length === 0) {
+        event.preventDefault();
+        return;
+      }
+      const first = focusables[0];
+      const last = focusables[focusables.length - 1];
+      const current = document.activeElement as HTMLElement | null;
+      if (event.shiftKey && current === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && current === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+
+    document.addEventListener("keydown", handleKeyDown);
+    window.requestAnimationFrame(focusFirst);
+
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+      body.style.overflow = previousOverflow;
+      const fallback = openerRef.current ?? lastFocusedRef.current;
+      fallback?.focus();
+    };
+  }, [sheetOpen, closeSheet]);
 
   const handleAddMeal = async (payload?: { calories?: number; name?: string }) => {
     setFeedback(null);
@@ -522,6 +548,7 @@ export default function CalorieGaugeClient({
   };
 
   const handleAction = (action: WheelAction) => {
+    setActiveActionId(action.id);
     if (action.type === "route" && action.href) {
       router.push(action.href);
       closeSheet();
@@ -576,6 +603,12 @@ export default function CalorieGaugeClient({
             : "cubic-bezier(0.18, 0.9, 0.32, 1.2)",
         }}
         onClick={(event) => event.stopPropagation()}
+        id="bottom-sheet"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="sheet-title"
+        ref={sheetRef}
+        tabIndex={-1}
       >
         <div className="sticky top-0 z-10 rounded-3xl bg-[var(--surface)]/95 px-5 pb-3 pt-4 backdrop-blur">
           <div
@@ -591,7 +624,10 @@ export default function CalorieGaugeClient({
               <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--muted)]">
                 {sheetView === "menu" ? "Actions rapides" : "Suivi"}
               </p>
-              <p className="text-base font-semibold text-[var(--foreground)]">
+              <p
+                id="sheet-title"
+                className="text-base font-semibold text-[var(--foreground)]"
+              >
                 {sheetView === "menu"
                   ? "Selectionne une action"
                   : sheetView === "reports"
@@ -622,25 +658,27 @@ export default function CalorieGaugeClient({
         </div>
 
         {sheetView === "menu" ? (
-          <div className="fade-slide-in px-5 pb-5 pt-4 space-y-4">
-            <div className="flex snap-x snap-mandatory gap-3 overflow-x-auto pb-2 pt-1 [-webkit-overflow-scrolling:touch]">
-              {wheelActions
-                .filter((action) => action.type === "sheet")
-                .map((action) => (
+          <div className="fade-slide-in space-y-4 px-5 pb-5 pt-4">
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--muted)]">
+                Actions
+              </p>
+              <div className="mt-3 grid grid-cols-2 gap-3">
+                {wheelActions.map((action) => (
                   <button
                     key={action.id}
                     type="button"
-                    className="flex min-w-[150px] snap-center flex-col items-start gap-1 rounded-2xl border border-[var(--border)] bg-white/70 px-3 py-3 text-left text-sm font-semibold text-[var(--foreground)] transition duration-200 hover:-translate-y-0.5 hover:bg-white hover:shadow-sm"
+                    className={cn(
+                      "flex flex-col items-start gap-1 rounded-2xl border bg-white/70 px-3 py-3 text-left text-sm font-semibold text-[var(--foreground)] transition duration-200 hover:-translate-y-0.5 hover:bg-white hover:shadow-sm",
+                      activeActionId === action.id
+                        ? "border-[var(--accent)] shadow-[0_0_0_1px_var(--accent)]"
+                        : "border-[var(--border)]"
+                    )}
                     onClick={() => handleAction(action)}
+                    onFocus={() => setActiveActionId(action.id)}
+                    aria-pressed={activeActionId === action.id}
                   >
-                    <div className="flex items-center gap-2">
-                      {action.icon ? (
-                        <span className="text-lg" aria-hidden="true">
-                          {action.icon}
-                        </span>
-                      ) : null}
-                      <span>{action.label}</span>
-                    </div>
+                    <span>{action.label}</span>
                     {action.helper ? (
                       <span className="text-xs font-medium text-[var(--muted)]">
                         {action.helper}
@@ -648,114 +686,71 @@ export default function CalorieGaugeClient({
                     ) : null}
                   </button>
                 ))}
+              </div>
             </div>
 
             <div className="rounded-2xl border border-[var(--border)] bg-white/70 px-4 py-3">
               <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--muted)]">
-                Raccourcis
+                Aujourd&apos;hui
               </p>
-              <div className="mt-3 flex flex-wrap gap-2">
-                {wheelActions
-                  .filter((action) => action.type === "route")
-                  .map((action) => (
-                    <Button
-                      key={action.id}
-                      type="button"
-                      size="sm"
-                      variant="outline"
-                      onClick={() => handleAction(action)}
-                      className="gap-2"
-                    >
-                      {action.icon ? (
-                        <span className="text-sm" aria-hidden="true">
-                          {action.icon}
+              <div className="mt-3 grid gap-2">
+                {mealLogs.length === 0 && activityLogs.length === 0 ? (
+                  <p className="text-sm text-[var(--muted)]">
+                    Aucun enregistrement pour l&apos;instant.
+                  </p>
+                ) : (
+                  <>
+                    {mealLogs.slice(0, 3).map((meal) => (
+                      <div
+                        key={meal.id}
+                        className="flex items-center justify-between text-sm"
+                      >
+                        <span className="text-[var(--foreground)]">
+                          {meal.name?.trim() || "Repas"}
                         </span>
-                      ) : null}
-                      {action.label}
-                    </Button>
-                  ))}
+                        <div className="flex items-center gap-2">
+                          <span className="text-[var(--muted)]">
+                            +{(meal.calories ?? 0).toFixed(0)}
+                          </span>
+                          <button
+                            type="button"
+                            className="text-xs text-red-600"
+                            onClick={() => handleDeleteMeal(meal.id)}
+                          >
+                            Suppr.
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                    {activityLogs.slice(0, 3).map((activity) => (
+                      <div
+                        key={activity.id}
+                        className="flex items-center justify-between text-sm"
+                      >
+                        <span className="text-[var(--foreground)]">
+                          {activity.activity_type}
+                        </span>
+                        <div className="flex items-center gap-2">
+                          <span className="text-[var(--muted)]">
+                            -{(activity.calories_burned ?? 0).toFixed(0)}
+                          </span>
+                          <button
+                            type="button"
+                            className="text-xs text-red-600"
+                            onClick={() => handleDeleteActivity(activity.id)}
+                          >
+                            Suppr.
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </>
+                )}
               </div>
-              {wheelActions.map((action) => (
-                <button
-                  key={action.id}
-                  type="button"
-                  className="flex min-w-[150px] snap-center flex-col items-start gap-1 rounded-2xl border border-[var(--border)] bg-white/70 px-3 py-3 text-left text-sm font-semibold text-[var(--foreground)] transition duration-200 hover:-translate-y-0.5 hover:bg-white hover:shadow-sm"
-                  onClick={() => handleAction(action)}
-                >
-                  <span>{action.label}</span>
-                  {action.helper ? (
-                    <span className="text-xs font-medium text-[var(--muted)]">
-                      {action.helper}
-                    </span>
-                  ) : null}
-                </button>
-              ))}
             </div>
 
-            <div className="grid gap-3">
-              <div className="rounded-2xl border border-[var(--border)] bg-white/70 px-4 py-3">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--muted)]">
-                  Aujourd&apos;hui
-                </p>
-                <div className="mt-3 grid gap-2">
-                  {mealLogs.length === 0 && activityLogs.length === 0 ? (
-                    <p className="text-sm text-[var(--muted)]">
-                      Aucun enregistrement pour l&apos;instant.
-                    </p>
-                  ) : (
-                    <>
-                      {mealLogs.slice(0, 3).map((meal) => (
-                        <div
-                          key={meal.id}
-                          className="flex items-center justify-between text-sm"
-                        >
-                          <span className="text-[var(--foreground)]">
-                            {meal.name?.trim() || "Repas"}
-                          </span>
-                          <div className="flex items-center gap-2">
-                            <span className="text-[var(--muted)]">
-                              +{(meal.calories ?? 0).toFixed(0)}
-                            </span>
-                            <button
-                              type="button"
-                              className="text-xs text-red-600"
-                              onClick={() => handleDeleteMeal(meal.id)}
-                            >
-                              Suppr.
-                            </button>
-                          </div>
-                        </div>
-                      ))}
-                      {activityLogs.slice(0, 3).map((activity) => (
-                        <div
-                          key={activity.id}
-                          className="flex items-center justify-between text-sm"
-                        >
-                          <span className="text-[var(--foreground)]">
-                            {activity.activity_type}
-                          </span>
-                          <div className="flex items-center gap-2">
-                            <span className="text-[var(--muted)]">
-                              -{(activity.calories_burned ?? 0).toFixed(0)}
-                            </span>
-                            <button
-                              type="button"
-                              className="text-xs text-red-600"
-                              onClick={() => handleDeleteActivity(activity.id)}
-                            >
-                              Suppr.
-                            </button>
-                          </div>
-                        </div>
-                      ))}
-                    </>
-                  )}
-                </div>
-              </div>
-
-              <div className="flex items-center justify-end">
-                <LogoutButton />
-              </div>
+            <div className="flex items-center justify-end">
+              <LogoutButton />
             </div>
           </div>
         ) : null}
@@ -999,9 +994,6 @@ export default function CalorieGaugeClient({
             Aujourd&apos;hui
           </p>
           <p className="mt-1 text-sm text-[var(--muted)]">{todayLabel}</p>
-          <p className="mt-2 text-xs text-[var(--muted)]">
-            {viewModeDescriptions[viewMode]}
-          </p>
         </div>
         <div className="flex flex-col items-end gap-2 text-right">
           <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--muted)]">
@@ -1011,36 +1003,13 @@ export default function CalorieGaugeClient({
             {targetData.adjustedTarget.toFixed(0)} kcal
           </p>
           <p className="text-[10px] text-[var(--muted)]">avec le sport</p>
-          <div className="flex rounded-full border border-[var(--border)] bg-white/80 p-1 text-[11px] font-semibold shadow-sm">
-            {[
-              { id: "today", label: "Jour" },
-              { id: "summary", label: "Resume" },
-              { id: "focus", label: "Focus" },
-            ].map((item) => (
-              <button
-                key={item.id}
-                type="button"
-                className={cn(
-                  "rounded-full px-3 py-1 transition",
-                  viewMode === item.id
-                    ? "bg-[var(--accent)] text-white shadow-sm"
-                    : "text-[var(--muted)] hover:text-[var(--foreground)]"
-                )}
-                onClick={() =>
-                  setViewMode(item.id as "today" | "summary" | "focus")
-                }
-              >
-                {item.label}
-              </button>
-            ))}
-          </div>
         </div>
       </header>
 
       {error ? <p className="text-sm text-red-600">{error}</p> : null}
       {clientError ? <p className="text-sm text-red-600">{clientError}</p> : null}
 
-      {!targetData.hasCore && viewMode !== "focus" ? (
+      {!targetData.hasCore ? (
         <Card className="border border-amber-200 bg-amber-50/80 p-4">
           <p className="text-sm text-amber-800">
             Complete ton profil (sexe, taille, age, poids) pour un objectif
@@ -1049,137 +1018,28 @@ export default function CalorieGaugeClient({
         </Card>
       ) : null}
 
-      {showGauge ? (
-        <Card className="space-y-4">
-          <div className="flex flex-col items-center gap-4">
-            <CalorieGauge
-              consumed={totals.mealTotal}
-              burned={totals.activityTotal}
-              target={targetData.adjustedTarget}
-              net={totals.net}
-              delta={delta}
-            />
-            {viewMode === "today" ? (
-              <p className="text-xs text-[var(--muted)]">
-                Objectif de base {targetData.baseTarget.toFixed(0)} kcal · ajuste
-                avec le sport
-              </p>
-            ) : null}
-            {trendDelta !== null && viewMode !== "focus" ? (
-              <div className="rounded-full border border-[var(--border)] bg-white/70 px-3 py-1 text-xs font-semibold text-[var(--foreground)]">
-                {trendDelta >= 0 ? "+" : "-"}
-                {Math.abs(trendDelta).toFixed(0)} kcal vs hier
-              </div>
-            ) : null}
-            {viewMode !== "focus" ? (
-              <span
-                className={cn(
-                  "rounded-full px-3 py-1 text-xs font-semibold",
-                  statusBadge.className
-                )}
-              >
-                {statusBadge.label}
-              </span>
-            ) : null}
-            {viewMode !== "focus" ? (
-              <div className="flex flex-wrap items-center justify-center gap-2 text-xs font-semibold">
-                {[
-                  {
-                    label: "Consommees",
-                    value: `${totals.mealTotal.toFixed(0)} kcal`,
-                    tone: "text-orange-700 bg-orange-100/80",
-                  },
-                  {
-                    label: "Brulees",
-                    value: `${totals.activityTotal.toFixed(0)} kcal`,
-                    tone: "text-sky-700 bg-sky-100/80",
-                  },
-                  {
-                    label: "Restantes",
-                    value: `${remaining >= 0 ? "" : "-"}${Math.abs(
-                      remaining
-                    ).toFixed(0)} kcal`,
-                    tone:
-                      remaining >= 0
-                        ? "text-emerald-700 bg-emerald-100/80"
-                        : "text-red-700 bg-red-100/80",
-                  },
-                ].map((item) => (
-                  <span
-                    key={item.label}
-                    className={cn(
-                      "rounded-full px-3 py-1 shadow-sm",
-                      item.tone
-                    )}
-                  >
-                    {item.label} · {item.value}
-                  </span>
-                ))}
-              </div>
-            ) : null}
-            {viewMode !== "focus" ? (
-              <div className="w-full max-w-xs space-y-2 rounded-2xl border border-[var(--border)] bg-white/70 px-4 py-3">
-                <div className="flex items-center justify-between text-xs font-semibold text-[var(--muted)]">
-                  <span>Progression net</span>
-                  <span>{progressPercent}%</span>
-                </div>
-                <div className="h-2 w-full overflow-hidden rounded-full bg-[var(--surface-strong)]">
-                  <div
-                    className="h-full rounded-full bg-gradient-to-r from-emerald-300 via-[var(--accent)] to-sky-300 transition-all duration-500"
-                    style={{ width: `${progressPercent}%` }}
-                  />
-                </div>
-                <div className="flex flex-wrap items-center justify-between text-[11px] text-[var(--muted)]">
-                  <span>Objectif {targetData.adjustedTarget.toFixed(0)} kcal</span>
-                  <span>Net {totals.net.toFixed(0)} kcal</span>
-                </div>
-              </div>
-            ) : null}
-            {viewMode !== "focus" ? (
-              <div className="flex flex-wrap items-center justify-center gap-3 text-[11px] font-semibold text-[var(--muted)]">
-                <span className="flex items-center gap-2">
-                  <span className="h-2 w-2 rounded-full bg-[#F59E0B]" />
-                  Repas
-                </span>
-                <span className="flex items-center gap-2">
-                  <span className="h-2 w-2 rounded-full bg-[#38BDF8]" />
-                  Sport
-                </span>
-              </div>
-            ) : null}
-            {viewMode !== "focus" ? (
-              <div className="grid w-full max-w-sm grid-cols-3 gap-2">
-                {[
-                  { label: "Repas", icon: "🍽️", view: "meal" as SheetView },
-                  {
-                    label: "Activite",
-                    icon: "🏃",
-                    view: "activity" as SheetView,
-                  },
-                  { label: "Poids", icon: "⚖️", view: "weight" as SheetView },
-                ].map((item) => (
-                  <Button
-                    key={item.label}
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="flex items-center justify-center gap-2"
-                    onClick={() => {
-                      openSheet();
-                      setSheetView(item.view);
-                    }}
-                  >
-                    <span aria-hidden="true">{item.icon}</span>
-                    {item.label}
-                  </Button>
-                ))}
-              </div>
-            ) : null}
-          </div>
-        </Card>
-      ) : null}
+      <Card className="space-y-4">
+        <div className="flex flex-col items-center gap-4">
+          <CalorieGauge
+            consumed={totals.mealTotal}
+            burned={totals.activityTotal}
+            target={targetData.adjustedTarget}
+            net={totals.net}
+          />
+          <p className="text-xs text-[var(--muted)]">
+            Objectif de base {targetData.baseTarget.toFixed(0)} kcal · ajuste
+            avec le sport
+          </p>
+          {trendDelta !== null ? (
+            <div className="rounded-full border border-[var(--border)] bg-white/70 px-3 py-1 text-xs font-semibold text-[var(--foreground)]">
+              {trendDelta >= 0 ? "+" : "-"}
+              {Math.abs(trendDelta).toFixed(0)} kcal vs hier
+            </div>
+          ) : null}
+        </div>
+      </Card>
 
-      {!hasLogs && viewMode === "today" ? (
+      {!hasLogs ? (
         <Card className="space-y-3 border border-[var(--border)] bg-white/70">
           <div>
             <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--muted)]">
@@ -1323,76 +1183,75 @@ export default function CalorieGaugeClient({
               </p>
             </div>
           </div>
-          <div className="mt-4 rounded-2xl border border-[var(--border)] bg-[var(--accent-soft)]/70 px-4 py-3 text-sm text-[var(--foreground)]">
-            <span className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--accent-strong)]">
-              Insight
-            </span>
-            <p className="mt-2">{reportInsight}</p>
-          </div>
+        </div>
+        <div className="rounded-2xl border border-[var(--border)] bg-[var(--accent-soft)]/70 px-4 py-3 text-sm text-[var(--foreground)]">
+          <span className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--accent-strong)]">
+            Insight
+          </span>
+          <p className="mt-2">{reportInsight}</p>
         </div>
       </Card>
 
-      {showStats ? (
-        <div className="grid w-full grid-cols-2 gap-3">
-          {[
-            {
-              label: "Repas",
-              value: `+${totals.mealTotal.toFixed(0)}`,
-              color: "text-orange-600",
-            },
-            {
-              label: "Sport",
-              value: `-${totals.activityTotal.toFixed(0)}`,
-              color: "text-sky-600",
-            },
-            {
-              label: "Net",
-              value: `${totals.net.toFixed(0)}`,
-              color: "text-[var(--foreground)]",
-            },
-            {
-              label: "Delta",
-              value: `${formatSigned(delta)}`,
-              color: delta > 0 ? "text-red-600" : "text-emerald-600",
-            },
-          ].map((item) => (
-            <div
-              key={item.label}
-              className="rounded-2xl border border-[var(--border)] bg-white/70 px-4 py-3"
-            >
-              <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--muted)]">
-                {item.label}
-              </p>
-              <p className={cn("mt-2 text-lg font-semibold", item.color)}>
-                {item.value} kcal
-              </p>
-            </div>
-          ))}
-        </div>
-      ) : null}
+      <Card className="grid gap-3 sm:grid-cols-2">
+        {[
+          {
+            label: "Objectif",
+            value: `${targetData.adjustedTarget.toFixed(0)} kcal`,
+            tone: "text-[var(--foreground)]",
+          },
+          {
+            label: "Consommees",
+            value: `${totals.mealTotal.toFixed(0)} kcal`,
+            tone: "text-orange-600",
+          },
+          {
+            label: "Brulees",
+            value: `${totals.activityTotal.toFixed(0)} kcal`,
+            tone: "text-sky-600",
+          },
+          {
+            label: "Delta",
+            value: `${formatSigned(delta)} kcal`,
+            tone: delta > 0 ? "text-red-600" : "text-emerald-600",
+          },
+        ].map((item) => (
+          <div
+            key={item.label}
+            className="rounded-2xl border border-[var(--border)] bg-white/70 px-4 py-3"
+          >
+            <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--muted)]">
+              {item.label}
+            </p>
+            <p className={cn("mt-2 text-lg font-semibold", item.tone)}>
+              {item.value}
+            </p>
+          </div>
+        ))}
+      </Card>
 
-      {showWeightEquivalent ? (
-        <Card className="space-y-2">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--muted)]">
-            Equivalent poids
-          </p>
-          <p className="text-lg font-semibold text-[var(--foreground)]">
-            {weightKg >= 0 ? "+" : "-"}
-            {Math.abs(weightKg).toFixed(2)} kg · {weightG >= 0 ? "+" : "-"}
-            {Math.abs(weightG).toFixed(0)} g
-          </p>
-          <p className="text-[11px] text-[var(--muted)]">est.</p>
-        </Card>
-      ) : null}
+      <Card className="space-y-2">
+        <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--muted)]">
+          Equivalent poids
+        </p>
+        <p className="text-lg font-semibold text-[var(--foreground)]">
+          {weightKg >= 0 ? "+" : "-"}
+          {Math.abs(weightKg).toFixed(2)} kg · {weightG >= 0 ? "+" : "-"}
+          {Math.abs(weightG).toFixed(0)} g
+        </p>
+        <p className="text-[11px] text-[var(--muted)]">est.</p>
+      </Card>
 
       <button
         type="button"
         aria-label="Ouvrir le menu"
+        aria-expanded={sheetOpen}
+        aria-controls="bottom-sheet"
         className="fixed bottom-6 left-1/2 z-40 flex h-16 w-16 -translate-x-1/2 items-center justify-center rounded-full bg-[var(--accent)] text-2xl text-white shadow-[0_18px_40px_rgba(12,141,133,0.35)] transition-transform duration-300 hover:scale-[1.03]"
         onClick={() => {
           openSheet();
           setSheetView("menu");
         }}
+        ref={openerRef}
       >
         <span className="absolute inset-0 rounded-full bg-[var(--accent)]/30 animate-ping" />
         <span className="relative">+</span>

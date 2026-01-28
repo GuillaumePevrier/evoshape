@@ -1,5 +1,3 @@
-import { cn } from "@/lib/cn";
-
 const clamp = (value: number, min: number, max: number) =>
   Math.min(Math.max(value, min), max);
 
@@ -8,7 +6,6 @@ type CalorieGaugeProps = {
   burned: number;
   target: number;
   net: number;
-  delta: number;
   size?: number;
 };
 
@@ -17,12 +14,13 @@ export function CalorieGauge({
   burned,
   target,
   net,
-  delta,
   size = 220,
 }: CalorieGaugeProps) {
-  const safeTarget = target > 0 ? target : 1;
-  const consumedProgress = clamp(consumed / safeTarget, 0, 1);
-  const burnedProgress = clamp(burned / safeTarget, 0, 1);
+  const safeConsumed = Number.isFinite(consumed) ? consumed : 0;
+  const safeBurned = Number.isFinite(burned) ? burned : 0;
+  const safeTarget = Number.isFinite(target) && target > 0 ? target : 1;
+  const consumedProgress = clamp(safeConsumed / safeTarget, 0, 1);
+  const burnedProgress = clamp(safeBurned / safeTarget, 0, 1);
 
   const stroke = 14;
   const innerStroke = 10;
@@ -34,8 +32,6 @@ export function CalorieGauge({
 
   const consumedOffset = outerCirc * (1 - consumedProgress);
   const burnedOffset = innerCirc * (1 - burnedProgress);
-
-  const deltaLabel = delta === 0 ? "0" : delta > 0 ? `+${delta}` : `${delta}`;
 
   return (
     <div className="relative flex items-center justify-center">
@@ -96,17 +92,6 @@ export function CalorieGauge({
           {net.toFixed(0)}
         </p>
         <p className="text-xs text-[var(--muted)]">kcal</p>
-        <div
-          className={cn(
-            "mt-2 rounded-full px-3 py-1 text-[11px] font-semibold",
-            delta > 0
-              ? "bg-red-100 text-red-700"
-              : "bg-emerald-100 text-emerald-700",
-            delta !== 0 ? "delta-pulse" : null
-          )}
-        >
-          {deltaLabel} kcal
-        </div>
       </div>
     </div>
   );
