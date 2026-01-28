@@ -59,10 +59,17 @@ type CalorieGaugeClientProps = {
 
 type SheetView = "menu" | "meal" | "activity" | "weight" | "reports";
 
+const viewModeDescriptions: Record<"today" | "summary" | "focus", string> = {
+  today: "Vue complete avec jauge, stats et actions rapides.",
+  summary: "Resume compact pour verifier le net rapidement.",
+  focus: "Mode minimal pour se concentrer sur l'essentiel.",
+};
+
 type WheelAction = {
   id: SheetView | "profile" | "notifications" | "settings";
   label: string;
   helper?: string;
+  icon?: string;
   type: "sheet" | "route";
   href?: string;
 };
@@ -78,20 +85,47 @@ const QUICK_ACTIVITIES = [
 ];
 
 const wheelActions: WheelAction[] = [
-  { id: "meal", label: "Ajouter repas", helper: "Calories + nom", type: "sheet" },
+  {
+    id: "meal",
+    label: "Ajouter repas",
+    helper: "Calories + nom",
+    icon: "🍽️",
+    type: "sheet",
+  },
   {
     id: "activity",
     label: "Ajouter activite",
     helper: "Calories brulees",
+    icon: "🏃",
     type: "sheet",
   },
-  { id: "weight", label: "Ajouter poids", helper: "Poids du jour", type: "sheet" },
-  { id: "reports", label: "Rapports", helper: "7 & 30 jours", type: "sheet" },
-  { id: "profile", label: "Profil", helper: "Objectifs & profil", type: "route", href: "/app/profile" },
+  {
+    id: "weight",
+    label: "Ajouter poids",
+    helper: "Poids du jour",
+    icon: "⚖️",
+    type: "sheet",
+  },
+  {
+    id: "reports",
+    label: "Rapports",
+    helper: "7 & 30 jours",
+    icon: "📊",
+    type: "sheet",
+  },
+  {
+    id: "profile",
+    label: "Profil",
+    helper: "Objectifs & profil",
+    icon: "👤",
+    type: "route",
+    href: "/app/profile",
+  },
   {
     id: "settings",
     label: "Parametres",
     helper: "Preferences",
+    icon: "⚙️",
     type: "route",
     href: "/app/settings",
   },
@@ -99,6 +133,7 @@ const wheelActions: WheelAction[] = [
     id: "notifications",
     label: "Notifications",
     helper: "Messages & alertes",
+    icon: "🔔",
     type: "route",
     href: "/app/notifications",
   },
@@ -218,6 +253,22 @@ export default function CalorieGaugeClient({
   const delta = totals.net - targetData.adjustedTarget;
   const weightKg = delta / 7700;
   const weightG = Math.round(weightKg * 1000);
+  const remaining = targetData.adjustedTarget - totals.net;
+  const progressValue =
+    targetData.adjustedTarget > 0
+      ? Math.min(Math.max(totals.net / targetData.adjustedTarget, 0), 1)
+      : 0;
+  const progressPercent = Math.round(progressValue * 100);
+  const statusBadge =
+    remaining >= 0
+      ? {
+          label: "Dans l'objectif",
+          className: "bg-emerald-100 text-emerald-700",
+        }
+      : {
+          label: "Au-dessus",
+          className: "bg-red-100 text-red-700",
+        };
 
   const todayLabel = new Intl.DateTimeFormat("fr-FR", {
     day: "numeric",
@@ -227,6 +278,7 @@ export default function CalorieGaugeClient({
   const showGauge = viewMode !== "summary";
   const showStats = viewMode === "today";
   const showWeightEquivalent = viewMode !== "focus";
+  const hasLogs = mealLogs.length > 0 || activityLogs.length > 0;
 
   const reportSeries = reportRange === "7" ? netSeries7 : netSeries30;
   const reportStats = useMemo(() => {
@@ -239,6 +291,28 @@ export default function CalorieGaugeClient({
     const max = Math.max(...reportSeries);
     return { total, average, min, max };
   }, [reportSeries]);
+
+  const trendDelta = useMemo(() => {
+    if (netSeries7.length < 2) {
+      return null;
+    }
+    const latest = netSeries7[netSeries7.length - 1];
+    const previous = netSeries7[netSeries7.length - 2];
+    return latest - previous;
+  }, [netSeries7]);
+
+  const reportInsight = useMemo(() => {
+    if (reportSeries.length === 0) {
+      return "Ajoute quelques jours pour voir ta tendance.";
+    }
+    if (reportStats.average === 0) {
+      return "Net stable sur la periode.";
+    }
+    if (reportStats.average < 0) {
+      return "Tendance en dessous de l'objectif, continue comme ca.";
+    }
+    return "Tendance au-dessus de l'objectif, ajuste en douceur.";
+  }, [reportSeries.length, reportStats.average]);
 
   const reportWeightDelta = useMemo(() => {
     if (weightEntriesState.length < 2) return null;
@@ -486,14 +560,14 @@ export default function CalorieGaugeClient({
   const sheetContent = (
     <div
       className={cn(
-        "fixed inset-0 z-50 flex items-end justify-center px-4 pb-4 transition-opacity duration-200",
+        "sheet-backdrop fixed inset-0 z-50 flex items-end justify-center px-4 pb-4 transition-opacity duration-200",
         sheetVisible ? "bg-black/45 opacity-100" : "opacity-0"
       )}
       onClick={closeSheet}
     >
       <div
         className={cn(
-          "w-full max-w-md max-h-[80vh] overflow-y-auto rounded-3xl border border-[var(--border)] bg-[var(--surface)] p-5 shadow-[0_24px_70px_rgba(17,16,14,0.25)] transition-transform duration-300"
+          "sheet-pop w-full max-w-md max-h-[80vh] overflow-y-auto rounded-3xl border border-[var(--border)] bg-[var(--surface)] shadow-[0_24px_70px_rgba(17,16,14,0.25)] transition-transform duration-300"
         )}
         style={{
           transform: `translateY(${sheetOffset + (sheetVisible ? 0 : 24)}px)`,
@@ -503,56 +577,104 @@ export default function CalorieGaugeClient({
         }}
         onClick={(event) => event.stopPropagation()}
       >
-        <div
-          className="mx-auto mb-3 h-1.5 w-12 rounded-full bg-[var(--border)]"
-          role="presentation"
-          onPointerDown={handleSheetDragStart}
-          onPointerMove={handleSheetDragMove}
-          onPointerUp={handleSheetDragEnd}
-          onPointerCancel={handleSheetDragEnd}
-        />
-        <div className="flex items-center justify-between">
-          <p className="text-sm font-semibold text-[var(--foreground)]">
-            {sheetView === "menu"
-              ? "Actions"
-              : sheetView === "reports"
-                ? "Rapports"
-                : "Ajouter"}
-          </p>
-          {sheetView !== "menu" ? (
-            <Button
-              type="button"
-              size="sm"
-              variant="ghost"
-              onClick={() => setSheetView("menu")}
-            >
-              Retour
-            </Button>
-          ) : (
-            <Button type="button" size="sm" variant="ghost" onClick={closeSheet}>
-              Fermer
-            </Button>
-          )}
+        <div className="sticky top-0 z-10 rounded-3xl bg-[var(--surface)]/95 px-5 pb-3 pt-4 backdrop-blur">
+          <div
+            className="mx-auto mb-3 h-2 w-14 rounded-full bg-[var(--border)]"
+            role="presentation"
+            onPointerDown={handleSheetDragStart}
+            onPointerMove={handleSheetDragMove}
+            onPointerUp={handleSheetDragEnd}
+            onPointerCancel={handleSheetDragEnd}
+          />
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--muted)]">
+                {sheetView === "menu" ? "Actions rapides" : "Suivi"}
+              </p>
+              <p className="text-base font-semibold text-[var(--foreground)]">
+                {sheetView === "menu"
+                  ? "Selectionne une action"
+                  : sheetView === "reports"
+                    ? "Rapports"
+                    : "Ajouter"}
+              </p>
+            </div>
+            {sheetView !== "menu" ? (
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                onClick={() => setSheetView("menu")}
+              >
+                Retour
+              </Button>
+            ) : (
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                onClick={closeSheet}
+              >
+                Fermer
+              </Button>
+            )}
+          </div>
         </div>
 
         {sheetView === "menu" ? (
-          <div className="mt-4 space-y-4">
+          <div className="fade-slide-in px-5 pb-5 pt-4 space-y-4">
             <div className="flex snap-x snap-mandatory gap-3 overflow-x-auto pb-2 pt-1 [-webkit-overflow-scrolling:touch]">
-              {wheelActions.map((action) => (
-                <button
-                  key={action.id}
-                  type="button"
-                  className="flex min-w-[150px] snap-center flex-col items-start gap-1 rounded-2xl border border-[var(--border)] bg-white/70 px-3 py-3 text-left text-sm font-semibold text-[var(--foreground)] transition hover:bg-white"
-                  onClick={() => handleAction(action)}
-                >
-                  <span>{action.label}</span>
-                  {action.helper ? (
-                    <span className="text-xs font-medium text-[var(--muted)]">
-                      {action.helper}
-                    </span>
-                  ) : null}
-                </button>
-              ))}
+              {wheelActions
+                .filter((action) => action.type === "sheet")
+                .map((action) => (
+                  <button
+                    key={action.id}
+                    type="button"
+                    className="flex min-w-[150px] snap-center flex-col items-start gap-1 rounded-2xl border border-[var(--border)] bg-white/70 px-3 py-3 text-left text-sm font-semibold text-[var(--foreground)] transition duration-200 hover:-translate-y-0.5 hover:bg-white hover:shadow-sm"
+                    onClick={() => handleAction(action)}
+                  >
+                    <div className="flex items-center gap-2">
+                      {action.icon ? (
+                        <span className="text-lg" aria-hidden="true">
+                          {action.icon}
+                        </span>
+                      ) : null}
+                      <span>{action.label}</span>
+                    </div>
+                    {action.helper ? (
+                      <span className="text-xs font-medium text-[var(--muted)]">
+                        {action.helper}
+                      </span>
+                    ) : null}
+                  </button>
+                ))}
+            </div>
+
+            <div className="rounded-2xl border border-[var(--border)] bg-white/70 px-4 py-3">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--muted)]">
+                Raccourcis
+              </p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {wheelActions
+                  .filter((action) => action.type === "route")
+                  .map((action) => (
+                    <Button
+                      key={action.id}
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={() => handleAction(action)}
+                      className="gap-2"
+                    >
+                      {action.icon ? (
+                        <span className="text-sm" aria-hidden="true">
+                          {action.icon}
+                        </span>
+                      ) : null}
+                      {action.label}
+                    </Button>
+                  ))}
+              </div>
             </div>
 
             <div className="grid gap-3">
@@ -624,7 +746,7 @@ export default function CalorieGaugeClient({
         ) : null}
 
         {sheetView === "meal" ? (
-          <div className="mt-4 space-y-3">
+          <div className="fade-slide-in px-5 pb-5 pt-4 space-y-3">
             <Input
               placeholder="Nom (optionnel)"
               value={mealName}
@@ -652,20 +774,22 @@ export default function CalorieGaugeClient({
                 </Button>
               ))}
             </div>
-            <Button
-              type="button"
-              size="lg"
-              className="w-full"
-              disabled={saving}
-              onClick={() => handleAddMeal()}
-            >
-              Ajouter repas
-            </Button>
+            <div className="sticky bottom-0 bg-[var(--surface)]/95 pt-2">
+              <Button
+                type="button"
+                size="lg"
+                className="w-full"
+                disabled={saving}
+                onClick={() => handleAddMeal()}
+              >
+                Ajouter repas
+              </Button>
+            </div>
           </div>
         ) : null}
 
         {sheetView === "activity" ? (
-          <div className="mt-4 space-y-3">
+          <div className="fade-slide-in px-5 pb-5 pt-4 space-y-3">
             <Input
               placeholder="Nom (optionnel)"
               value={activityType}
@@ -698,20 +822,22 @@ export default function CalorieGaugeClient({
                 </Button>
               ))}
             </div>
-            <Button
-              type="button"
-              size="lg"
-              className="w-full"
-              disabled={saving}
-              onClick={() => handleAddActivity()}
-            >
-              Ajouter activite
-            </Button>
+            <div className="sticky bottom-0 bg-[var(--surface)]/95 pt-2">
+              <Button
+                type="button"
+                size="lg"
+                className="w-full"
+                disabled={saving}
+                onClick={() => handleAddActivity()}
+              >
+                Ajouter activite
+              </Button>
+            </div>
           </div>
         ) : null}
 
         {sheetView === "weight" ? (
-          <div className="mt-4 space-y-3">
+          <div className="fade-slide-in px-5 pb-5 pt-4 space-y-3">
             <Input
               placeholder="Poids (kg)"
               inputMode="decimal"
@@ -721,21 +847,23 @@ export default function CalorieGaugeClient({
               value={weightValue}
               onChange={(event) => setWeightValue(event.target.value)}
             />
-            <Button
-              type="button"
-              size="lg"
-              className="w-full"
-              disabled={saving}
-              onClick={handleAddWeight}
-            >
-              Enregistrer le poids
-            </Button>
+            <div className="sticky bottom-0 bg-[var(--surface)]/95 pt-2">
+              <Button
+                type="button"
+                size="lg"
+                className="w-full"
+                disabled={saving}
+                onClick={handleAddWeight}
+              >
+                Enregistrer le poids
+              </Button>
+            </div>
           </div>
         ) : null}
 
         {sheetView === "reports" ? (
-          <div className="mt-4 space-y-3">
-            <div className="flex rounded-full border border-[var(--border)] bg-white/70 p-1 text-xs font-semibold">
+          <div className="fade-slide-in px-5 pb-5 pt-4 space-y-3">
+            <div className="flex rounded-full border border-[var(--border)] bg-white/80 p-1 text-xs font-semibold shadow-sm">
               {(["7", "30"] as const).map((range) => (
                 <button
                   key={range}
@@ -743,8 +871,8 @@ export default function CalorieGaugeClient({
                   className={cn(
                     "rounded-full px-3 py-1 transition",
                     reportRange === range
-                      ? "bg-[var(--accent)] text-white"
-                      : "text-[var(--muted)]"
+                      ? "bg-[var(--accent)] text-white shadow-sm"
+                      : "text-[var(--muted)] hover:text-[var(--foreground)]"
                   )}
                   onClick={() => setReportRange(range)}
                 >
@@ -761,33 +889,69 @@ export default function CalorieGaugeClient({
             />
             <div className="grid grid-cols-2 gap-3 text-sm">
               <div className="rounded-2xl border border-[var(--border)] bg-white/70 px-3 py-2">
-                <p className="text-[10px] uppercase tracking-[0.2em] text-[var(--muted)]">
-                  Net moyen
-                </p>
+                <div className="flex items-center justify-between">
+                  <p className="text-[10px] uppercase tracking-[0.2em] text-[var(--muted)]">
+                    Net moyen
+                  </p>
+                  <span
+                    className={cn(
+                      "rounded-full px-2 py-0.5 text-[10px] font-semibold",
+                      reportStats.average >= 0
+                        ? "bg-emerald-100 text-emerald-700"
+                        : "bg-red-100 text-red-700"
+                    )}
+                  >
+                    {reportStats.average >= 0 ? "+" : "-"}
+                  </span>
+                </div>
                 <p className="mt-1 font-semibold text-[var(--foreground)]">
                   {reportStats.average.toFixed(0)} kcal
                 </p>
               </div>
               <div className="rounded-2xl border border-[var(--border)] bg-white/70 px-3 py-2">
-                <p className="text-[10px] uppercase tracking-[0.2em] text-[var(--muted)]">
-                  Total net
-                </p>
+                <div className="flex items-center justify-between">
+                  <p className="text-[10px] uppercase tracking-[0.2em] text-[var(--muted)]">
+                    Total net
+                  </p>
+                  <span className="rounded-full bg-[var(--accent-soft)] px-2 py-0.5 text-[10px] font-semibold text-[var(--accent-strong)]">
+                    {reportRange}j
+                  </span>
+                </div>
                 <p className="mt-1 font-semibold text-[var(--foreground)]">
                   {reportStats.total.toFixed(0)} kcal
                 </p>
               </div>
               <div className="rounded-2xl border border-[var(--border)] bg-white/70 px-3 py-2">
-                <p className="text-[10px] uppercase tracking-[0.2em] text-[var(--muted)]">
-                  Mini / Maxi
-                </p>
+                <div className="flex items-center justify-between">
+                  <p className="text-[10px] uppercase tracking-[0.2em] text-[var(--muted)]">
+                    Mini / Maxi
+                  </p>
+                  <span className="rounded-full bg-white/80 px-2 py-0.5 text-[10px] font-semibold text-[var(--muted)]">
+                    net
+                  </span>
+                </div>
                 <p className="mt-1 font-semibold text-[var(--foreground)]">
                   {reportStats.min.toFixed(0)} / {reportStats.max.toFixed(0)}
                 </p>
               </div>
               <div className="rounded-2xl border border-[var(--border)] bg-white/70 px-3 py-2">
-                <p className="text-[10px] uppercase tracking-[0.2em] text-[var(--muted)]">
-                  Poids
-                </p>
+                <div className="flex items-center justify-between">
+                  <p className="text-[10px] uppercase tracking-[0.2em] text-[var(--muted)]">
+                    Poids
+                  </p>
+                  <span
+                    className={cn(
+                      "rounded-full px-2 py-0.5 text-[10px] font-semibold",
+                      reportWeightDelta === null
+                        ? "bg-white/80 text-[var(--muted)]"
+                        : reportWeightDelta >= 0
+                          ? "bg-red-100 text-red-700"
+                          : "bg-emerald-100 text-emerald-700"
+                    )}
+                  >
+                    {reportWeightDelta === null ? "n/a" : "7j"}
+                  </span>
+                </div>
                 <p className="mt-1 font-semibold text-[var(--foreground)]">
                   {reportWeightDelta === null
                     ? "--"
@@ -801,10 +965,12 @@ export default function CalorieGaugeClient({
         ) : null}
 
         {clientError ? (
-          <p className="mt-3 text-sm text-red-600">{clientError}</p>
+          <p className="mt-3 px-5 pb-2 text-sm text-red-600">{clientError}</p>
         ) : null}
         {feedback ? (
-          <p className="mt-2 text-sm text-[var(--accent-strong)]">{feedback}</p>
+          <p className="mt-2 px-5 pb-5 text-sm text-[var(--accent-strong)]">
+            {feedback}
+          </p>
         ) : null}
       </div>
     </div>
@@ -818,6 +984,9 @@ export default function CalorieGaugeClient({
             Aujourd&apos;hui
           </p>
           <p className="mt-1 text-sm text-[var(--muted)]">{todayLabel}</p>
+          <p className="mt-2 text-xs text-[var(--muted)]">
+            {viewModeDescriptions[viewMode]}
+          </p>
         </div>
         <div className="flex flex-col items-end gap-2 text-right">
           <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--muted)]">
@@ -827,7 +996,7 @@ export default function CalorieGaugeClient({
             {targetData.adjustedTarget.toFixed(0)} kcal
           </p>
           <p className="text-[10px] text-[var(--muted)]">avec le sport</p>
-          <div className="flex rounded-full border border-[var(--border)] bg-white/70 p-1 text-[11px] font-semibold">
+          <div className="flex rounded-full border border-[var(--border)] bg-white/80 p-1 text-[11px] font-semibold shadow-sm">
             {[
               { id: "today", label: "Jour" },
               { id: "summary", label: "Resume" },
@@ -839,8 +1008,8 @@ export default function CalorieGaugeClient({
                 className={cn(
                   "rounded-full px-3 py-1 transition",
                   viewMode === item.id
-                    ? "bg-[var(--accent)] text-white"
-                    : "text-[var(--muted)]"
+                    ? "bg-[var(--accent)] text-white shadow-sm"
+                    : "text-[var(--muted)] hover:text-[var(--foreground)]"
                 )}
                 onClick={() =>
                   setViewMode(item.id as "today" | "summary" | "focus")
@@ -881,6 +1050,153 @@ export default function CalorieGaugeClient({
                 avec le sport
               </p>
             ) : null}
+            {trendDelta !== null && viewMode !== "focus" ? (
+              <div className="rounded-full border border-[var(--border)] bg-white/70 px-3 py-1 text-xs font-semibold text-[var(--foreground)]">
+                {trendDelta >= 0 ? "+" : "-"}
+                {Math.abs(trendDelta).toFixed(0)} kcal vs hier
+              </div>
+            ) : null}
+            {viewMode !== "focus" ? (
+              <span
+                className={cn(
+                  "rounded-full px-3 py-1 text-xs font-semibold",
+                  statusBadge.className
+                )}
+              >
+                {statusBadge.label}
+              </span>
+            ) : null}
+            {viewMode !== "focus" ? (
+              <div className="flex flex-wrap items-center justify-center gap-2 text-xs font-semibold">
+                {[
+                  {
+                    label: "Consommees",
+                    value: `${totals.mealTotal.toFixed(0)} kcal`,
+                    tone: "text-orange-700 bg-orange-100/80",
+                  },
+                  {
+                    label: "Brulees",
+                    value: `${totals.activityTotal.toFixed(0)} kcal`,
+                    tone: "text-sky-700 bg-sky-100/80",
+                  },
+                  {
+                    label: "Restantes",
+                    value: `${remaining >= 0 ? "" : "-"}${Math.abs(
+                      remaining
+                    ).toFixed(0)} kcal`,
+                    tone:
+                      remaining >= 0
+                        ? "text-emerald-700 bg-emerald-100/80"
+                        : "text-red-700 bg-red-100/80",
+                  },
+                ].map((item) => (
+                  <span
+                    key={item.label}
+                    className={cn(
+                      "rounded-full px-3 py-1 shadow-sm",
+                      item.tone
+                    )}
+                  >
+                    {item.label} · {item.value}
+                  </span>
+                ))}
+              </div>
+            ) : null}
+            {viewMode !== "focus" ? (
+              <div className="w-full max-w-xs space-y-2 rounded-2xl border border-[var(--border)] bg-white/70 px-4 py-3">
+                <div className="flex items-center justify-between text-xs font-semibold text-[var(--muted)]">
+                  <span>Progression net</span>
+                  <span>{progressPercent}%</span>
+                </div>
+                <div className="h-2 w-full overflow-hidden rounded-full bg-[var(--surface-strong)]">
+                  <div
+                    className="h-full rounded-full bg-gradient-to-r from-emerald-300 via-[var(--accent)] to-sky-300 transition-all duration-500"
+                    style={{ width: `${progressPercent}%` }}
+                  />
+                </div>
+                <div className="flex flex-wrap items-center justify-between text-[11px] text-[var(--muted)]">
+                  <span>Objectif {targetData.adjustedTarget.toFixed(0)} kcal</span>
+                  <span>Net {totals.net.toFixed(0)} kcal</span>
+                </div>
+              </div>
+            ) : null}
+            {viewMode !== "focus" ? (
+              <div className="flex flex-wrap items-center justify-center gap-3 text-[11px] font-semibold text-[var(--muted)]">
+                <span className="flex items-center gap-2">
+                  <span className="h-2 w-2 rounded-full bg-[#F59E0B]" />
+                  Repas
+                </span>
+                <span className="flex items-center gap-2">
+                  <span className="h-2 w-2 rounded-full bg-[#38BDF8]" />
+                  Sport
+                </span>
+              </div>
+            ) : null}
+            {viewMode !== "focus" ? (
+              <div className="grid w-full max-w-sm grid-cols-3 gap-2">
+                {[
+                  { label: "Repas", icon: "🍽️", view: "meal" as SheetView },
+                  {
+                    label: "Activite",
+                    icon: "🏃",
+                    view: "activity" as SheetView,
+                  },
+                  { label: "Poids", icon: "⚖️", view: "weight" as SheetView },
+                ].map((item) => (
+                  <Button
+                    key={item.label}
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="flex items-center justify-center gap-2"
+                    onClick={() => {
+                      openSheet();
+                      setSheetView(item.view);
+                    }}
+                  >
+                    <span aria-hidden="true">{item.icon}</span>
+                    {item.label}
+                  </Button>
+                ))}
+              </div>
+            ) : null}
+          </div>
+        </Card>
+      ) : null}
+
+      {!hasLogs && viewMode === "today" ? (
+        <Card className="space-y-3 border border-[var(--border)] bg-white/70">
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--muted)]">
+              Demarrer simplement
+            </p>
+            <p className="mt-1 text-sm text-[var(--foreground)]">
+              Ajoute un repas ou une activite pour lancer ton suivi du jour.
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              type="button"
+              size="sm"
+              variant="soft"
+              onClick={() => {
+                openSheet();
+                setSheetView("meal");
+              }}
+            >
+              Ajouter un repas
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() => {
+                openSheet();
+                setSheetView("activity");
+              }}
+            >
+              Ajouter une activite
+            </Button>
           </div>
         </Card>
       ) : null}
@@ -891,7 +1207,7 @@ export default function CalorieGaugeClient({
             <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--muted)]">
               Rapport {reportRange} jours
             </p>
-            <div className="flex rounded-full border border-[var(--border)] bg-white/70 p-1 text-xs font-semibold">
+            <div className="flex rounded-full border border-[var(--border)] bg-white/80 p-1 text-xs font-semibold shadow-sm">
               {(["7", "30"] as const).map((range) => (
                 <button
                   key={range}
@@ -899,8 +1215,8 @@ export default function CalorieGaugeClient({
                   className={cn(
                     "rounded-full px-3 py-1 transition",
                     reportRange === range
-                      ? "bg-[var(--accent)] text-white"
-                      : "text-[var(--muted)]"
+                      ? "bg-[var(--accent)] text-white shadow-sm"
+                      : "text-[var(--muted)] hover:text-[var(--foreground)]"
                   )}
                   onClick={() => setReportRange(range)}
                 >
@@ -920,33 +1236,69 @@ export default function CalorieGaugeClient({
           </div>
           <div className="mt-3 grid grid-cols-2 gap-3 text-sm">
             <div className="rounded-2xl border border-[var(--border)] bg-white/70 px-3 py-2">
-              <p className="text-[10px] uppercase tracking-[0.2em] text-[var(--muted)]">
-                Net moyen
-              </p>
+              <div className="flex items-center justify-between">
+                <p className="text-[10px] uppercase tracking-[0.2em] text-[var(--muted)]">
+                  Net moyen
+                </p>
+                <span
+                  className={cn(
+                    "rounded-full px-2 py-0.5 text-[10px] font-semibold",
+                    reportStats.average >= 0
+                      ? "bg-emerald-100 text-emerald-700"
+                      : "bg-red-100 text-red-700"
+                  )}
+                >
+                  {reportStats.average >= 0 ? "+" : "-"}
+                </span>
+              </div>
               <p className="mt-1 font-semibold text-[var(--foreground)]">
                 {reportStats.average.toFixed(0)} kcal
               </p>
             </div>
             <div className="rounded-2xl border border-[var(--border)] bg-white/70 px-3 py-2">
-              <p className="text-[10px] uppercase tracking-[0.2em] text-[var(--muted)]">
-                Total net
-              </p>
+              <div className="flex items-center justify-between">
+                <p className="text-[10px] uppercase tracking-[0.2em] text-[var(--muted)]">
+                  Total net
+                </p>
+                <span className="rounded-full bg-[var(--accent-soft)] px-2 py-0.5 text-[10px] font-semibold text-[var(--accent-strong)]">
+                  {reportRange}j
+                </span>
+              </div>
               <p className="mt-1 font-semibold text-[var(--foreground)]">
                 {reportStats.total.toFixed(0)} kcal
               </p>
             </div>
             <div className="rounded-2xl border border-[var(--border)] bg-white/70 px-3 py-2">
-              <p className="text-[10px] uppercase tracking-[0.2em] text-[var(--muted)]">
-                Mini / Maxi
-              </p>
+              <div className="flex items-center justify-between">
+                <p className="text-[10px] uppercase tracking-[0.2em] text-[var(--muted)]">
+                  Mini / Maxi
+                </p>
+                <span className="rounded-full bg-white/80 px-2 py-0.5 text-[10px] font-semibold text-[var(--muted)]">
+                  net
+                </span>
+              </div>
               <p className="mt-1 font-semibold text-[var(--foreground)]">
                 {reportStats.min.toFixed(0)} / {reportStats.max.toFixed(0)}
               </p>
             </div>
             <div className="rounded-2xl border border-[var(--border)] bg-white/70 px-3 py-2">
-              <p className="text-[10px] uppercase tracking-[0.2em] text-[var(--muted)]">
-                Poids
-              </p>
+              <div className="flex items-center justify-between">
+                <p className="text-[10px] uppercase tracking-[0.2em] text-[var(--muted)]">
+                  Poids
+                </p>
+                <span
+                  className={cn(
+                    "rounded-full px-2 py-0.5 text-[10px] font-semibold",
+                    reportWeightDelta === null
+                      ? "bg-white/80 text-[var(--muted)]"
+                      : reportWeightDelta >= 0
+                        ? "bg-red-100 text-red-700"
+                        : "bg-emerald-100 text-emerald-700"
+                  )}
+                >
+                  {reportWeightDelta === null ? "n/a" : "7j"}
+                </span>
+              </div>
               <p className="mt-1 font-semibold text-[var(--foreground)]">
                 {reportWeightDelta === null
                   ? "--"
@@ -955,6 +1307,12 @@ export default function CalorieGaugeClient({
                     ).toFixed(1)} kg`}
               </p>
             </div>
+          </div>
+          <div className="mt-4 rounded-2xl border border-[var(--border)] bg-[var(--accent-soft)]/70 px-4 py-3 text-sm text-[var(--foreground)]">
+            <span className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--accent-strong)]">
+              Insight
+            </span>
+            <p className="mt-2">{reportInsight}</p>
           </div>
         </div>
       </Card>
