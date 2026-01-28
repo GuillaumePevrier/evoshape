@@ -77,6 +77,13 @@ type FoodDetails = {
   servingSizeUnit: string | null;
 };
 
+type ActivitySearchItem = {
+  id: number;
+  name: string;
+  category: string | null;
+  equipment: string[];
+};
+
 type WheelAction = {
   id: SheetView | "profile" | "notifications" | "settings";
   label: string;
@@ -238,6 +245,12 @@ export default function CalorieGaugeClient({
   const [selectedActivityId, setSelectedActivityId] = useState<string | null>(
     null
   );
+  const [activityQuery, setActivityQuery] = useState("");
+  const [activityResults, setActivityResults] = useState<ActivitySearchItem[]>(
+    []
+  );
+  const [activityLoading, setActivityLoading] = useState(false);
+  const [activityError, setActivityError] = useState<string | null>(null);
   const [weightValue, setWeightValue] = useState("");
   const [feedback, setFeedback] = useState<string | null>(null);
   const [clientError, setClientError] = useState<string | null>(null);
@@ -462,6 +475,45 @@ export default function CalorieGaugeClient({
       setActivityType(selectedActivity.label);
     }
   }, [selectedActivity]);
+
+  useEffect(() => {
+    setActivityError(null);
+    if (!activityQuery || activityQuery.trim().length < 2) {
+      setActivityResults([]);
+      return;
+    }
+
+    const controller = new AbortController();
+    const timeout = window.setTimeout(async () => {
+      setActivityLoading(true);
+      try {
+        const response = await fetch(
+          `/api/activity/search?q=${encodeURIComponent(
+            activityQuery.trim()
+          )}&limit=8`,
+          { signal: controller.signal }
+        );
+        if (!response.ok) {
+          setActivityError("Recherche indisponible.");
+          setActivityResults([]);
+          return;
+        }
+        const data = (await response.json()) as { items: ActivitySearchItem[] };
+        setActivityResults(data.items ?? []);
+      } catch (error) {
+        if (!(error instanceof DOMException && error.name === "AbortError")) {
+          setActivityError("Recherche indisponible.");
+        }
+      } finally {
+        setActivityLoading(false);
+      }
+    }, 350);
+
+    return () => {
+      controller.abort();
+      window.clearTimeout(timeout);
+    };
+  }, [activityQuery]);
 
   useEffect(() => {
     if (selectedActivity && activityCaloriesMode === "auto") {
@@ -767,6 +819,8 @@ export default function CalorieGaugeClient({
     setActivityDuration("30");
     setActivityCaloriesMode("auto");
     setSelectedActivityId(null);
+    setActivityQuery("");
+    setActivityResults([]);
     setFeedback("Activite ajoutee.");
     await refreshActivities();
     setSaving(false);
@@ -1278,6 +1332,45 @@ export default function CalorieGaugeClient({
 
         {sheetView === "activity" ? (
           <div className="fade-slide-in px-5 pb-5 pt-4 space-y-3">
+            <Input
+              placeholder="Rechercher un exercice"
+              value={activityQuery}
+              onChange={(event) => setActivityQuery(event.target.value)}
+            />
+            {activityLoading ? (
+              <p className="text-xs text-[var(--muted)]">Recherche...</p>
+            ) : null}
+            {activityError ? (
+              <p className="text-xs text-red-600">{activityError}</p>
+            ) : null}
+            {activityResults.length > 0 ? (
+              <div className="max-h-32 space-y-2 overflow-y-auto rounded-2xl border border-[var(--border)] bg-white/70 p-2">
+                {activityResults.map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    className="flex w-full flex-col items-start gap-1 rounded-xl px-2 py-2 text-left text-sm transition hover:bg-white"
+                    onClick={() => {
+                      setActivityType(item.name);
+                      setActivityQuery("");
+                      setActivityResults([]);
+                      setSelectedActivityId(null);
+                      setActivityCaloriesMode("manual");
+                    }}
+                  >
+                    <span className="font-semibold text-[var(--foreground)]">
+                      {item.name}
+                    </span>
+                    {item.category ? (
+                      <span className="text-xs text-[var(--muted)]">
+                        {item.category}
+                      </span>
+                    ) : null}
+                  </button>
+                ))}
+              </div>
+            ) : null}
+
             <div className="space-y-2">
               <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--muted)]">
                 Activites
