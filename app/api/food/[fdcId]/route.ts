@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 
 const FDC_API_BASE = "https://api.nal.usda.gov/fdc/v1";
 const CACHE_TTL_MS = 12 * 60 * 60 * 1000;
@@ -33,8 +33,8 @@ const getEnergyNutrient = (nutrients: FoodNutrient[]) => {
 };
 
 export async function GET(
-  request: Request,
-  { params }: { params: { fdcId: string } }
+  request: NextRequest,
+  { params }: { params: Promise<{ fdcId: string }> }
 ) {
   const apiKey = process.env.USDA_FDC_API_KEY ?? "";
   if (!apiKey) {
@@ -44,7 +44,7 @@ export async function GET(
     );
   }
 
-  const fdcId = params.fdcId;
+  const { fdcId } = await params;
   const cached = detailCache.get(fdcId);
   if (cached && cached.expiresAt > Date.now()) {
     return NextResponse.json(cached.data);
