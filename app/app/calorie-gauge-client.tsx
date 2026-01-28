@@ -67,6 +67,17 @@ type WheelAction = {
   href?: string;
 };
 
+type UndoState =
+  | {
+      type: "meal";
+      item: MealLog;
+    }
+  | {
+      type: "activity";
+      item: ActivityLog;
+    }
+  | null;
+
 const DEFAULT_TARGET = 2000;
 const ACTIVITY_FACTOR = 1.2;
 
@@ -203,16 +214,34 @@ export default function CalorieGaugeClient({
   const [sheetExpanded, setSheetExpanded] = useState(false);
   const [reportRange, setReportRange] = useState<"7" | "30">("7");
   const [activeActionId, setActiveActionId] = useState<string | null>(null);
+  const [quickPulseKey, setQuickPulseKey] = useState<string | null>(null);
+  const [undoState, setUndoState] = useState<UndoState>(null);
+  const [undoBusy, setUndoBusy] = useState(false);
 
   const dragStart = useRef<number | null>(null);
   const dragDelta = useRef(0);
   const dragFrame = useRef<number | null>(null);
+  const undoTimer = useRef<number | null>(null);
   const openerRef = useRef<HTMLButtonElement | null>(null);
   const sheetRef = useRef<HTMLDivElement | null>(null);
   const lastFocusedRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
     setMounted(true);
+  }, []);
+
+  useEffect(() => {
+    if (!quickPulseKey) return;
+    const timeout = window.setTimeout(() => setQuickPulseKey(null), 500);
+    return () => window.clearTimeout(timeout);
+  }, [quickPulseKey]);
+
+  useEffect(() => {
+    return () => {
+      if (undoTimer.current) {
+        window.clearTimeout(undoTimer.current);
+      }
+    };
   }, []);
 
   const totals = useMemo(() => {
@@ -351,6 +380,52 @@ export default function CalorieGaugeClient({
     setActiveActionId(null);
     setSheetExpanded(false);
     window.setTimeout(() => setSheetOpen(false), 220);
+  };
+
+  const triggerHaptic = () => {
+    if (typeof navigator !== "undefined" && "vibrate" in navigator) {
+      navigator.vibrate(10);
+    }
+  };
+
+  const queueUndo = (state: UndoState) => {
+    if (!state) return;
+    setUndoState(state);
+    if (undoTimer.current) {
+      window.clearTimeout(undoTimer.current);
+    }
+    undoTimer.current = window.setTimeout(() => {
+      setUndoState(null);
+    }, 6000);
+  };
+
+  const handleUndo = async () => {
+    if (!undoState || !userId) return;
+    setUndoBusy(true);
+    const supabase = createSupabaseBrowserClient();
+    if (undoState.type === "meal") {
+      const item = undoState.item;
+      await supabase.from("meal_logs").insert({
+        user_id: userId,
+        recorded_at: item.recorded_at,
+        meal_type: item.meal_type,
+        name: item.name,
+        calories: item.calories ?? 0,
+      });
+      await refreshMeals();
+    } else {
+      const item = undoState.item;
+      await supabase.from("activity_logs").insert({
+        user_id: userId,
+        recorded_at: item.recorded_at,
+        activity_type: item.activity_type ?? "Activite",
+        duration_min: item.duration_min ?? 0,
+        calories_burned: item.calories_burned ?? 0,
+      });
+      await refreshActivities();
+    }
+    setUndoState(null);
+    setUndoBusy(false);
   };
 
   useEffect(() => {
@@ -526,6 +601,10 @@ export default function CalorieGaugeClient({
 
   const handleDeleteMeal = async (id: number) => {
     setClientError(null);
+    const target = mealLogs.find((item) => item.id === id) ?? null;
+    if (target) {
+      setMealLogs((prev) => prev.filter((item) => item.id !== id));
+    }
     const supabase = createSupabaseBrowserClient();
     const { error: deleteError } = await supabase
       .from("meal_logs")
@@ -533,13 +612,23 @@ export default function CalorieGaugeClient({
       .eq("id", id);
     if (deleteError) {
       setClientError(deleteError.message);
+      if (target) {
+        await refreshMeals();
+      }
       return;
     }
     await refreshMeals();
+    if (target) {
+      queueUndo({ type: "meal", item: target });
+    }
   };
 
   const handleDeleteActivity = async (id: number) => {
     setClientError(null);
+    const target = activityLogs.find((item) => item.id === id) ?? null;
+    if (target) {
+      setActivityLogs((prev) => prev.filter((item) => item.id !== id));
+    }
     const supabase = createSupabaseBrowserClient();
     const { error: deleteError } = await supabase
       .from("activity_logs")
@@ -547,9 +636,15 @@ export default function CalorieGaugeClient({
       .eq("id", id);
     if (deleteError) {
       setClientError(deleteError.message);
+      if (target) {
+        await refreshActivities();
+      }
       return;
     }
     await refreshActivities();
+    if (target) {
+      queueUndo({ type: "activity", item: target });
+    }
   };
 
   const handleAction = (action: WheelAction) => {
@@ -1114,7 +1209,15 @@ export default function CalorieGaugeClient({
               size="sm"
               variant="soft"
               disabled={saving}
-              onClick={() => handleAddMeal({ calories })}
+              className={cn(
+                "transition",
+                quickPulseKey === `meal-${calories}` ? "quick-pulse" : ""
+              )}
+              onClick={() => {
+                setQuickPulseKey(`meal-${calories}`);
+                triggerHaptic();
+                handleAddMeal({ calories });
+              }}
             >
               +{calories}
             </Button>
@@ -1131,11 +1234,21 @@ export default function CalorieGaugeClient({
               size="sm"
               variant="outline"
               disabled={saving}
+              className={cn(
+                "transition",
+                quickPulseKey === `activity-${activity.label}`
+                  ? "quick-pulse"
+                  : ""
+              )}
               onClick={() =>
-                handleAddActivity({
-                  calories: activity.calories,
-                  type: activity.label,
-                })
+                (() => {
+                  setQuickPulseKey(`activity-${activity.label}`);
+                  triggerHaptic();
+                  handleAddActivity({
+                    calories: activity.calories,
+                    type: activity.label,
+                  });
+                })()
               }
             >
               {activity.label} -{activity.calories}
@@ -1351,7 +1464,7 @@ export default function CalorieGaugeClient({
         aria-label="Ouvrir le menu"
         aria-expanded={sheetOpen}
         aria-controls="bottom-sheet"
-        className="fixed bottom-6 left-1/2 z-40 flex h-16 w-16 -translate-x-1/2 items-center justify-center rounded-full bg-[var(--accent)] text-2xl text-white shadow-[0_18px_40px_rgba(12,141,133,0.35)] transition-transform duration-300 hover:scale-[1.03]"
+        className="fixed bottom-6 left-1/2 z-40 flex h-16 w-16 -translate-x-1/2 items-center justify-center rounded-full bg-[var(--accent)] text-white shadow-[0_18px_40px_rgba(12,141,133,0.35)] transition-transform duration-300 hover:scale-[1.03]"
         onClick={() => {
           openSheet();
           setSheetView("menu");
@@ -1359,8 +1472,40 @@ export default function CalorieGaugeClient({
         ref={openerRef}
       >
         <span className="absolute inset-0 rounded-full bg-[var(--accent)]/30 animate-ping" />
-        <span className="relative">+</span>
+        <div className="relative flex flex-col items-center leading-none">
+          <span className="text-lg font-semibold">
+            {formatSigned(totals.net)}
+          </span>
+          <span className="text-[10px] uppercase tracking-[0.2em]">kcal</span>
+        </div>
+        <span className="absolute -top-1 right-0 rounded-full bg-white/90 px-1.5 py-0.5 text-[10px] font-semibold text-[var(--accent-strong)] shadow">
+          +
+        </span>
       </button>
+
+      {undoState ? (
+        <div className="fixed bottom-24 left-1/2 z-40 w-[min(92vw,360px)] -translate-x-1/2">
+          <div className="undo-pop flex items-center justify-between gap-3 rounded-2xl border border-[var(--border)] bg-white/90 px-4 py-3 text-sm shadow-[0_18px_40px_rgba(17,16,14,0.18)]">
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--muted)]">
+                Suppression
+              </p>
+              <p className="text-[var(--foreground)]">
+                {undoState.type === "meal" ? "Repas supprime" : "Activite supprimee"}
+              </p>
+            </div>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              disabled={undoBusy}
+              onClick={handleUndo}
+            >
+              Annuler
+            </Button>
+          </div>
+        </div>
+      ) : null}
 
       {sheetOpen && mounted ? createPortal(sheetContent, document.body) : null}
     </div>

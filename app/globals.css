@@ -130,6 +130,14 @@ a {
   animation: deltaPulse 1.6s ease-in-out infinite;
 }
 
+.quick-pulse {
+  animation: quickPulse 0.45s ease-out;
+}
+
+.undo-pop {
+  animation: undoPop 220ms ease-out;
+}
+
 @keyframes avatarSpring {
   0% {
     transform: translateY(0) scale(1);
@@ -199,5 +207,31 @@ a {
   100% {
     opacity: 1;
     transform: translateY(0);
+  }
+}
+
+@keyframes quickPulse {
+  0% {
+    transform: scale(1);
+    box-shadow: 0 0 0 rgba(12, 141, 133, 0);
+  }
+  55% {
+    transform: scale(1.04);
+    box-shadow: 0 0 0 6px rgba(12, 141, 133, 0.18);
+  }
+  100% {
+    transform: scale(1);
+    box-shadow: 0 0 0 rgba(12, 141, 133, 0);
+  }
+}
+
+@keyframes undoPop {
+  0% {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
   }
 }
