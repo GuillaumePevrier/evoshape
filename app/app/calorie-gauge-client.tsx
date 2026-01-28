@@ -204,6 +204,7 @@ export default function CalorieGaugeClient({
   const [activeActionId, setActiveActionId] = useState<string | null>(null);
 
   const dragStart = useRef<number | null>(null);
+  const dragFrame = useRef<number | null>(null);
   const openerRef = useRef<HTMLButtonElement | null>(null);
   const sheetRef = useRef<HTMLDivElement | null>(null);
   const lastFocusedRef = useRef<HTMLElement | null>(null);
@@ -569,19 +570,30 @@ export default function CalorieGaugeClient({
   const handleSheetDragMove = (event: PointerEvent<HTMLDivElement>) => {
     if (dragStart.current === null) return;
     const deltaY = event.clientY - dragStart.current;
-    if (deltaY > 0) {
-      setSheetOffset(Math.min(deltaY, 240));
+    if (dragFrame.current) {
+      cancelAnimationFrame(dragFrame.current);
     }
+    dragFrame.current = requestAnimationFrame(() => {
+      if (deltaY > 0) {
+        setSheetOffset(Math.min(deltaY, 240));
+      } else {
+        setSheetOffset(0);
+      }
+    });
   };
 
   const handleSheetDragEnd = () => {
-    if (sheetOffset > 120) {
+    if (sheetOffset > 140) {
       closeSheet();
     } else {
       setSheetOffset(0);
     }
     setIsDragging(false);
     dragStart.current = null;
+    if (dragFrame.current) {
+      cancelAnimationFrame(dragFrame.current);
+      dragFrame.current = null;
+    }
   };
 
   const sheetContent = (
@@ -594,13 +606,15 @@ export default function CalorieGaugeClient({
     >
       <div
         className={cn(
-          "sheet-pop w-full max-w-md max-h-[80vh] overflow-y-auto rounded-3xl border border-[var(--border)] bg-[var(--surface)] shadow-[0_24px_70px_rgba(17,16,14,0.25)] transition-transform duration-300"
+          "sheet-pop w-full max-w-md max-h-[80vh] overflow-y-auto rounded-3xl border border-[var(--border)] bg-[var(--surface)] shadow-[0_24px_70px_rgba(17,16,14,0.25)] transition-transform duration-500"
         )}
         style={{
           transform: `translateY(${sheetOffset + (sheetVisible ? 0 : 24)}px)`,
           transitionTimingFunction: isDragging
             ? "linear"
-            : "cubic-bezier(0.18, 0.9, 0.32, 1.2)",
+            : "cubic-bezier(0.16, 1, 0.3, 1)",
+          transitionDuration: isDragging ? "0ms" : "420ms",
+          willChange: "transform",
         }}
         onClick={(event) => event.stopPropagation()}
         id="bottom-sheet"
@@ -611,14 +625,15 @@ export default function CalorieGaugeClient({
         tabIndex={-1}
       >
         <div className="sticky top-0 z-10 rounded-3xl bg-[var(--surface)]/95 px-5 pb-3 pt-4 backdrop-blur">
-          <div
-            className="mx-auto mb-3 h-2 w-14 rounded-full bg-[var(--border)]"
-            role="presentation"
-            onPointerDown={handleSheetDragStart}
-            onPointerMove={handleSheetDragMove}
-            onPointerUp={handleSheetDragEnd}
-            onPointerCancel={handleSheetDragEnd}
-          />
+            <div
+              className="mx-auto mb-3 h-2 w-14 rounded-full bg-[var(--border)]"
+              role="presentation"
+              onPointerDown={handleSheetDragStart}
+              onPointerMove={handleSheetDragMove}
+              onPointerUp={handleSheetDragEnd}
+              onPointerCancel={handleSheetDragEnd}
+              style={{ touchAction: "none" }}
+            />
           <div className="flex items-center justify-between">
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--muted)]">
@@ -995,7 +1010,7 @@ export default function CalorieGaugeClient({
           </p>
           <p className="mt-1 text-sm text-[var(--muted)]">{todayLabel}</p>
         </div>
-        <div className="flex flex-col items-end gap-2 text-right">
+        <div className="flex flex-col items-end gap-3 text-right">
           <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--muted)]">
             Objectif ajuste
           </p>
@@ -1003,6 +1018,18 @@ export default function CalorieGaugeClient({
             {targetData.adjustedTarget.toFixed(0)} kcal
           </p>
           <p className="text-[10px] text-[var(--muted)]">avec le sport</p>
+          <div className="rounded-2xl border border-[var(--border)] bg-white/70 px-2 py-1">
+            <Sparkline
+              values={netSeries7}
+              width={120}
+              height={36}
+              id="net-mini"
+              className="text-[var(--accent)]"
+              showArea={false}
+              showBaseline={false}
+              showLastDot={false}
+            />
+          </div>
         </div>
       </header>
 
