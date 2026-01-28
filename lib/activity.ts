@@ -13,6 +13,27 @@ export const ACTIVITY_LIBRARY: ActivityPreset[] = [
   { id: "swim", label: "Natation", met: 8 },
 ];
 
+const MET_KEYWORDS: Array<{ pattern: RegExp; met: number }> = [
+  { pattern: /(run|course|jog|sprint)/i, met: 9.8 },
+  { pattern: /(walk|marche|rando|hike)/i, met: 6 },
+  { pattern: /(cycle|velo|bike|spin)/i, met: 7.5 },
+  { pattern: /(swim|natation)/i, met: 8 },
+  { pattern: /(row|rameur)/i, met: 7 },
+  { pattern: /(hiit|crossfit|burpee)/i, met: 8.5 },
+  { pattern: /(strength|muscu|weight|halt(e|é)re|barbell|dumbbell)/i, met: 6 },
+  { pattern: /(yoga|pilates|stretch)/i, met: 2.5 },
+  { pattern: /(elliptical|elliptique)/i, met: 5 },
+  { pattern: /(stair|step|mont(é|e)e)/i, met: 8.8 },
+  { pattern: /(dance|zumba)/i, met: 6 },
+];
+
+export const estimateMetFromName = (input: string) => {
+  const value = input.trim();
+  if (!value) return null;
+  const match = MET_KEYWORDS.find((item) => item.pattern.test(value));
+  return match?.met ?? null;
+};
+
 export const estimateActivityCalories = (
   met: number,
   weightKg: number,

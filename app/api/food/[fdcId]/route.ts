@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 
 const FDC_API_BASE = "https://api.nal.usda.gov/fdc/v1";
+const CACHE_TTL_MS = 12 * 60 * 60 * 1000;
+const detailCache = new Map<string, { expiresAt: number; data: unknown }>();
 
 type FoodNutrient = {
   amount?: number;
@@ -43,6 +45,10 @@ export async function GET(
   }
 
   const fdcId = params.fdcId;
+  const cached = detailCache.get(fdcId);
+  if (cached && cached.expiresAt > Date.now()) {
+    return NextResponse.json(cached.data);
+  }
   const url = new URL(`${FDC_API_BASE}/food/${fdcId}`);
   url.searchParams.set("api_key", apiKey);
 
@@ -93,7 +99,7 @@ export async function GET(
     caloriesPer100g = energyAmount;
   }
 
-  return NextResponse.json({
+  const data = {
     source: "fdc",
     fdcId: food.fdcId ?? Number(fdcId),
     description: food.description ?? "",
@@ -103,5 +109,7 @@ export async function GET(
     servingSizeUnit: servingUnit,
     caloriesPerServing,
     caloriesPer100g,
-  });
+  };
+  detailCache.set(fdcId, { expiresAt: Date.now() + CACHE_TTL_MS, data });
+  return NextResponse.json(data);
 }

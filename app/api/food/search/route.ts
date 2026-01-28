@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 
 const FDC_API_BASE = "https://api.nal.usda.gov/fdc/v1";
+const CACHE_TTL_MS = 6 * 60 * 60 * 1000;
+const searchCache = new Map<string, { expiresAt: number; data: unknown }>();
 
 export async function GET(request: NextRequest) {
   const apiKey = process.env.USDA_FDC_API_KEY ?? "";
@@ -18,6 +20,12 @@ export async function GET(request: NextRequest) {
 
   if (!query || query.length < 2) {
     return NextResponse.json({ foods: [] });
+  }
+
+  const cacheKey = `${query.toLowerCase()}|${limit}`;
+  const cached = searchCache.get(cacheKey);
+  if (cached && cached.expiresAt > Date.now()) {
+    return NextResponse.json(cached.data);
   }
 
   const searchUrl = new URL(`${FDC_API_BASE}/foods/search`);
@@ -44,5 +52,7 @@ export async function GET(request: NextRequest) {
     dataType: food.dataType ?? null,
   }));
 
-  return NextResponse.json({ foods });
+  const data = { foods };
+  searchCache.set(cacheKey, { expiresAt: Date.now() + CACHE_TTL_MS, data });
+  return NextResponse.json(data);
 }

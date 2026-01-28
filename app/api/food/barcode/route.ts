@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 
 const USER_AGENT = "EvoShape (https://github.com/GuillaumePevrier/evoshape)";
+const CACHE_TTL_MS = 12 * 60 * 60 * 1000;
+const barcodeCache = new Map<string, { expiresAt: number; data: unknown }>();
 
 const parseServing = (raw: string | null) => {
   if (!raw) return { size: null, unit: null };
@@ -19,6 +21,11 @@ export async function GET(request: NextRequest) {
 
   if (!code) {
     return NextResponse.json({ error: "Missing barcode" }, { status: 400 });
+  }
+
+  const cached = barcodeCache.get(code);
+  if (cached && cached.expiresAt > Date.now()) {
+    return NextResponse.json(cached.data);
   }
 
   const apiUrl = new URL(
@@ -62,7 +69,7 @@ export async function GET(request: NextRequest) {
     product.serving_size ?? null
   );
 
-  return NextResponse.json({
+  const data = {
     source: "off",
     description: product.product_name ?? "",
     brandOwner: product.brands ?? null,
@@ -72,5 +79,8 @@ export async function GET(request: NextRequest) {
       : null,
     servingSize,
     servingSizeUnit,
-  });
+  };
+
+  barcodeCache.set(code, { expiresAt: Date.now() + CACHE_TTL_MS, data });
+  return NextResponse.json(data);
 }

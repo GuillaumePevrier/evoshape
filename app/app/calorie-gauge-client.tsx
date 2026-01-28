@@ -12,7 +12,11 @@ import { createSupabaseBrowserClient } from "@/src/lib/supabase/client";
 import { getISODate } from "@/lib/date";
 import { cn } from "@/lib/cn";
 import { Sparkline } from "@/components/ui/sparkline";
-import { ACTIVITY_LIBRARY, estimateActivityCalories } from "@/lib/activity";
+import {
+  ACTIVITY_LIBRARY,
+  estimateActivityCalories,
+  estimateMetFromName,
+} from "@/lib/activity";
 
 type MealLog = {
   id: number;
@@ -228,6 +232,7 @@ export default function CalorieGaugeClient({
     "auto"
   );
   const [mealQuantity, setMealQuantity] = useState("100");
+  const [mealUnit, setMealUnit] = useState<"g" | "serving">("g");
   const [foodQuery, setFoodQuery] = useState("");
   const [foodResults, setFoodResults] = useState<FoodSearchItem[]>([]);
   const [foodLoading, setFoodLoading] = useState(false);
@@ -245,6 +250,10 @@ export default function CalorieGaugeClient({
   const [selectedActivityId, setSelectedActivityId] = useState<string | null>(
     null
   );
+  const [activityMet, setActivityMet] = useState<number | null>(null);
+  const [activityMetSource, setActivityMetSource] = useState<
+    "library" | "wger" | null
+  >(null);
   const [activityQuery, setActivityQuery] = useState("");
   const [activityResults, setActivityResults] = useState<ActivitySearchItem[]>(
     []
@@ -403,11 +412,21 @@ export default function CalorieGaugeClient({
 
   const computeMealCalories = (
     food: FoodDetails | null,
-    quantityValue: string
+    quantityValue: string,
+    unit: "g" | "serving"
   ) => {
     if (!food) return null;
     const quantity = Number(quantityValue);
     if (!Number.isFinite(quantity) || quantity <= 0) {
+      return null;
+    }
+    if (unit === "serving") {
+      if (
+        food.caloriesPerServing !== null &&
+        Number.isFinite(food.caloriesPerServing)
+      ) {
+        return food.caloriesPerServing * quantity;
+      }
       return null;
     }
     if (food.caloriesPer100g !== null && Number.isFinite(food.caloriesPer100g)) {
@@ -463,16 +482,18 @@ export default function CalorieGaugeClient({
 
   useEffect(() => {
     if (selectedFood && mealCaloriesMode === "auto") {
-      const computed = computeMealCalories(selectedFood, mealQuantity);
+      const computed = computeMealCalories(selectedFood, mealQuantity, mealUnit);
       if (computed !== null) {
         setMealCalories(Math.round(computed).toString());
       }
     }
-  }, [selectedFood, mealQuantity, mealCaloriesMode]);
+  }, [selectedFood, mealQuantity, mealCaloriesMode, mealUnit]);
 
   useEffect(() => {
     if (selectedActivity) {
       setActivityType(selectedActivity.label);
+      setActivityMet(selectedActivity.met);
+      setActivityMetSource("library");
     }
   }, [selectedActivity]);
 
@@ -516,26 +537,22 @@ export default function CalorieGaugeClient({
   }, [activityQuery]);
 
   useEffect(() => {
-    if (selectedActivity && activityCaloriesMode === "auto") {
-      const minutes = Number(activityDuration);
-      if (!Number.isFinite(minutes) || minutes <= 0) {
-        return;
-      }
-      const computed = estimateActivityCalories(
-        selectedActivity.met,
-        weightForActivity,
-        minutes
-      );
-      if (Number.isFinite(computed)) {
-        setActivityCalories(Math.round(computed).toString());
-      }
+    if (activityCaloriesMode !== "auto" || !activityMet) {
+      return;
     }
-  }, [
-    selectedActivity,
-    activityDuration,
-    activityCaloriesMode,
-    weightForActivity,
-  ]);
+    const minutes = Number(activityDuration);
+    if (!Number.isFinite(minutes) || minutes <= 0) {
+      return;
+    }
+    const computed = estimateActivityCalories(
+      activityMet,
+      weightForActivity,
+      minutes
+    );
+    if (Number.isFinite(computed)) {
+      setActivityCalories(Math.round(computed).toString());
+    }
+  }, [activityMet, activityDuration, activityCaloriesMode, weightForActivity]);
 
   const refreshMeals = async () => {
     const supabase = createSupabaseBrowserClient();
@@ -582,6 +599,7 @@ export default function CalorieGaugeClient({
       const data = (await response.json()) as FoodDetails;
       setSelectedFood(data);
       setMealCaloriesMode("auto");
+      setMealUnit("g");
       setMealQuantity("100");
       setMealName((prev) => (prev ? prev : data.description ?? ""));
     } catch {
@@ -607,6 +625,7 @@ export default function CalorieGaugeClient({
       const data = (await response.json()) as FoodDetails;
       setSelectedFood(data);
       setMealCaloriesMode("auto");
+      setMealUnit("g");
       setMealQuantity("100");
       setMealName((prev) => (prev ? prev : data.description ?? ""));
     } catch {
@@ -767,6 +786,7 @@ export default function CalorieGaugeClient({
     setMealName("");
     setMealCalories("");
     setMealQuantity("100");
+    setMealUnit("g");
     setMealCaloriesMode("auto");
     setFoodQuery("");
     setFoodResults([]);
@@ -819,6 +839,8 @@ export default function CalorieGaugeClient({
     setActivityDuration("30");
     setActivityCaloriesMode("auto");
     setSelectedActivityId(null);
+    setActivityMet(null);
+    setActivityMetSource(null);
     setActivityQuery("");
     setActivityResults([]);
     setFeedback("Activite ajoutee.");
@@ -1258,14 +1280,41 @@ export default function CalorieGaugeClient({
               onChange={(event) => setMealName(event.target.value)}
             />
             {selectedFood ? (
-              <Input
-                placeholder="Quantite (g)"
-                inputMode="numeric"
-                type="number"
-                min={0}
-                value={mealQuantity}
-                onChange={(event) => setMealQuantity(event.target.value)}
-              />
+              <>
+                {selectedFood.caloriesPerServing !== null ? (
+                  <div className="flex items-center gap-2">
+                    {(["g", "serving"] as const).map((unit) => (
+                      <button
+                        key={unit}
+                        type="button"
+                        className={cn(
+                          "rounded-full border px-3 py-1 text-xs font-semibold transition",
+                          mealUnit === unit
+                            ? "border-[var(--accent)] bg-[var(--accent-soft)] text-[var(--accent-strong)]"
+                            : "border-[var(--border)] bg-white/70 text-[var(--foreground)]"
+                        )}
+                        onClick={() => {
+                          setMealUnit(unit);
+                          setMealQuantity(unit === "serving" ? "1" : "100");
+                          setMealCaloriesMode("auto");
+                        }}
+                      >
+                        {unit === "serving" ? "Portion" : "Grammes"}
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
+                <Input
+                  placeholder={
+                    mealUnit === "serving" ? "Quantite (portion)" : "Quantite (g)"
+                  }
+                  inputMode="numeric"
+                  type="number"
+                  min={0}
+                  value={mealQuantity}
+                  onChange={(event) => setMealQuantity(event.target.value)}
+                />
+              </>
             ) : null}
             <Input
               placeholder="Calories"
@@ -1355,7 +1404,18 @@ export default function CalorieGaugeClient({
                       setActivityQuery("");
                       setActivityResults([]);
                       setSelectedActivityId(null);
-                      setActivityCaloriesMode("manual");
+                      const inferredMet = estimateMetFromName(
+                        `${item.name} ${item.category ?? ""} ${item.equipment.join(" ")}`
+                      );
+                      if (inferredMet) {
+                        setActivityMet(inferredMet);
+                        setActivityMetSource("wger");
+                        setActivityCaloriesMode("auto");
+                      } else {
+                        setActivityMet(null);
+                        setActivityMetSource(null);
+                        setActivityCaloriesMode("manual");
+                      }
                     }}
                   >
                     <span className="font-semibold text-[var(--foreground)]">
@@ -1399,7 +1459,13 @@ export default function CalorieGaugeClient({
             <Input
               placeholder="Nom (optionnel)"
               value={activityType}
-              onChange={(event) => setActivityType(event.target.value)}
+              onChange={(event) => {
+                setActivityType(event.target.value);
+                if (!selectedActivityId && activityMetSource === "wger") {
+                  setActivityMet(null);
+                  setActivityMetSource(null);
+                }
+              }}
             />
             <Input
               placeholder="Duree (minutes)"
@@ -1441,6 +1507,11 @@ export default function CalorieGaugeClient({
                   {activityCaloriesMode === "auto" ? "Modifier" : "Auto"}
                 </Button>
               </div>
+            ) : null}
+            {!selectedActivity && activityMet ? (
+              <p className="text-xs text-[var(--muted)]">
+                MET estime {activityMet} {activityMetSource === "wger" ? "(wger)" : ""}
+              </p>
             ) : null}
             {usingWeightFallback ? (
               <p className="text-xs text-[var(--muted)]">
