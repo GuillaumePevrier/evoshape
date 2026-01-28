@@ -59,10 +59,17 @@ type CalorieGaugeClientProps = {
 
 type SheetView = "menu" | "meal" | "activity" | "weight" | "reports";
 
+const viewModeDescriptions: Record<"today" | "summary" | "focus", string> = {
+  today: "Vue complete avec jauge, stats et actions rapides.",
+  summary: "Resume compact pour verifier le net rapidement.",
+  focus: "Mode minimal pour se concentrer sur l'essentiel.",
+};
+
 type WheelAction = {
   id: SheetView | "profile" | "notifications" | "settings";
   label: string;
   helper?: string;
+  icon?: string;
   type: "sheet" | "route";
   href?: string;
 };
@@ -78,20 +85,47 @@ const QUICK_ACTIVITIES = [
 ];
 
 const wheelActions: WheelAction[] = [
-  { id: "meal", label: "Ajouter repas", helper: "Calories + nom", type: "sheet" },
+  {
+    id: "meal",
+    label: "Ajouter repas",
+    helper: "Calories + nom",
+    icon: "🍽️",
+    type: "sheet",
+  },
   {
     id: "activity",
     label: "Ajouter activite",
     helper: "Calories brulees",
+    icon: "🏃",
     type: "sheet",
   },
-  { id: "weight", label: "Ajouter poids", helper: "Poids du jour", type: "sheet" },
-  { id: "reports", label: "Rapports", helper: "7 & 30 jours", type: "sheet" },
-  { id: "profile", label: "Profil", helper: "Objectifs & profil", type: "route", href: "/app/profile" },
+  {
+    id: "weight",
+    label: "Ajouter poids",
+    helper: "Poids du jour",
+    icon: "⚖️",
+    type: "sheet",
+  },
+  {
+    id: "reports",
+    label: "Rapports",
+    helper: "7 & 30 jours",
+    icon: "📊",
+    type: "sheet",
+  },
+  {
+    id: "profile",
+    label: "Profil",
+    helper: "Objectifs & profil",
+    icon: "👤",
+    type: "route",
+    href: "/app/profile",
+  },
   {
     id: "settings",
     label: "Parametres",
     helper: "Preferences",
+    icon: "⚙️",
     type: "route",
     href: "/app/settings",
   },
@@ -99,6 +133,7 @@ const wheelActions: WheelAction[] = [
     id: "notifications",
     label: "Notifications",
     helper: "Messages & alertes",
+    icon: "🔔",
     type: "route",
     href: "/app/notifications",
   },
@@ -224,6 +259,16 @@ export default function CalorieGaugeClient({
       ? Math.min(Math.max(totals.net / targetData.adjustedTarget, 0), 1)
       : 0;
   const progressPercent = Math.round(progressValue * 100);
+  const statusBadge =
+    remaining >= 0
+      ? {
+          label: "Dans l'objectif",
+          className: "bg-emerald-100 text-emerald-700",
+        }
+      : {
+          label: "Au-dessus",
+          className: "bg-red-100 text-red-700",
+        };
 
   const todayLabel = new Intl.DateTimeFormat("fr-FR", {
     day: "numeric",
@@ -233,6 +278,7 @@ export default function CalorieGaugeClient({
   const showGauge = viewMode !== "summary";
   const showStats = viewMode === "today";
   const showWeightEquivalent = viewMode !== "focus";
+  const hasLogs = mealLogs.length > 0 || activityLogs.length > 0;
 
   const reportSeries = reportRange === "7" ? netSeries7 : netSeries30;
   const reportStats = useMemo(() => {
@@ -254,6 +300,19 @@ export default function CalorieGaugeClient({
     const previous = netSeries7[netSeries7.length - 2];
     return latest - previous;
   }, [netSeries7]);
+
+  const reportInsight = useMemo(() => {
+    if (reportSeries.length === 0) {
+      return "Ajoute quelques jours pour voir ta tendance.";
+    }
+    if (reportStats.average === 0) {
+      return "Net stable sur la periode.";
+    }
+    if (reportStats.average < 0) {
+      return "Tendance en dessous de l'objectif, continue comme ca.";
+    }
+    return "Tendance au-dessus de l'objectif, ajuste en douceur.";
+  }, [reportSeries.length, reportStats.average]);
 
   const reportWeightDelta = useMemo(() => {
     if (weightEntriesState.length < 2) return null;
@@ -565,6 +624,57 @@ export default function CalorieGaugeClient({
         {sheetView === "menu" ? (
           <div className="fade-slide-in px-5 pb-5 pt-4 space-y-4">
             <div className="flex snap-x snap-mandatory gap-3 overflow-x-auto pb-2 pt-1 [-webkit-overflow-scrolling:touch]">
+              {wheelActions
+                .filter((action) => action.type === "sheet")
+                .map((action) => (
+                  <button
+                    key={action.id}
+                    type="button"
+                    className="flex min-w-[150px] snap-center flex-col items-start gap-1 rounded-2xl border border-[var(--border)] bg-white/70 px-3 py-3 text-left text-sm font-semibold text-[var(--foreground)] transition duration-200 hover:-translate-y-0.5 hover:bg-white hover:shadow-sm"
+                    onClick={() => handleAction(action)}
+                  >
+                    <div className="flex items-center gap-2">
+                      {action.icon ? (
+                        <span className="text-lg" aria-hidden="true">
+                          {action.icon}
+                        </span>
+                      ) : null}
+                      <span>{action.label}</span>
+                    </div>
+                    {action.helper ? (
+                      <span className="text-xs font-medium text-[var(--muted)]">
+                        {action.helper}
+                      </span>
+                    ) : null}
+                  </button>
+                ))}
+            </div>
+
+            <div className="rounded-2xl border border-[var(--border)] bg-white/70 px-4 py-3">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--muted)]">
+                Raccourcis
+              </p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {wheelActions
+                  .filter((action) => action.type === "route")
+                  .map((action) => (
+                    <Button
+                      key={action.id}
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={() => handleAction(action)}
+                      className="gap-2"
+                    >
+                      {action.icon ? (
+                        <span className="text-sm" aria-hidden="true">
+                          {action.icon}
+                        </span>
+                      ) : null}
+                      {action.label}
+                    </Button>
+                  ))}
+              </div>
               {wheelActions.map((action) => (
                 <button
                   key={action.id}
@@ -889,6 +999,9 @@ export default function CalorieGaugeClient({
             Aujourd&apos;hui
           </p>
           <p className="mt-1 text-sm text-[var(--muted)]">{todayLabel}</p>
+          <p className="mt-2 text-xs text-[var(--muted)]">
+            {viewModeDescriptions[viewMode]}
+          </p>
         </div>
         <div className="flex flex-col items-end gap-2 text-right">
           <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--muted)]">
@@ -959,6 +1072,16 @@ export default function CalorieGaugeClient({
               </div>
             ) : null}
             {viewMode !== "focus" ? (
+              <span
+                className={cn(
+                  "rounded-full px-3 py-1 text-xs font-semibold",
+                  statusBadge.className
+                )}
+              >
+                {statusBadge.label}
+              </span>
+            ) : null}
+            {viewMode !== "focus" ? (
               <div className="flex flex-wrap items-center justify-center gap-2 text-xs font-semibold">
                 {[
                   {
@@ -1024,6 +1147,71 @@ export default function CalorieGaugeClient({
                 </span>
               </div>
             ) : null}
+            {viewMode !== "focus" ? (
+              <div className="grid w-full max-w-sm grid-cols-3 gap-2">
+                {[
+                  { label: "Repas", icon: "🍽️", view: "meal" as SheetView },
+                  {
+                    label: "Activite",
+                    icon: "🏃",
+                    view: "activity" as SheetView,
+                  },
+                  { label: "Poids", icon: "⚖️", view: "weight" as SheetView },
+                ].map((item) => (
+                  <Button
+                    key={item.label}
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="flex items-center justify-center gap-2"
+                    onClick={() => {
+                      openSheet();
+                      setSheetView(item.view);
+                    }}
+                  >
+                    <span aria-hidden="true">{item.icon}</span>
+                    {item.label}
+                  </Button>
+                ))}
+              </div>
+            ) : null}
+          </div>
+        </Card>
+      ) : null}
+
+      {!hasLogs && viewMode === "today" ? (
+        <Card className="space-y-3 border border-[var(--border)] bg-white/70">
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--muted)]">
+              Demarrer simplement
+            </p>
+            <p className="mt-1 text-sm text-[var(--foreground)]">
+              Ajoute un repas ou une activite pour lancer ton suivi du jour.
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              type="button"
+              size="sm"
+              variant="soft"
+              onClick={() => {
+                openSheet();
+                setSheetView("meal");
+              }}
+            >
+              Ajouter un repas
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() => {
+                openSheet();
+                setSheetView("activity");
+              }}
+            >
+              Ajouter une activite
+            </Button>
           </div>
         </Card>
       ) : null}
@@ -1134,6 +1322,12 @@ export default function CalorieGaugeClient({
                     ).toFixed(1)} kg`}
               </p>
             </div>
+          </div>
+          <div className="mt-4 rounded-2xl border border-[var(--border)] bg-[var(--accent-soft)]/70 px-4 py-3 text-sm text-[var(--foreground)]">
+            <span className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--accent-strong)]">
+              Insight
+            </span>
+            <p className="mt-2">{reportInsight}</p>
           </div>
         </div>
       </Card>

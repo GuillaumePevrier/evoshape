@@ -74,23 +74,19 @@ export default function AuthPanels() {
   };
 
   return (
-    <main className="mx-auto w-full max-w-md px-6 pb-16 pt-10">
+    <main className="mx-auto w-full max-w-md px-6 pb-12 pt-8">
       <div className="flex flex-col items-center gap-4 text-center">
         <Logo
           size="3xl"
           showBackground={false}
           showLabel={false}
           className="flex-col"
+          imageClassName="scale-110"
         />
         <div>
           <h1 className="text-2xl font-semibold text-[var(--foreground)]">
             {mode === "login" ? "Bon retour" : "Creer ton compte"}
           </h1>
-          <p className="mt-2 text-sm text-[var(--muted)]">
-            {mode === "login"
-              ? "Connecte-toi pour retrouver ta jauge."
-              : "Commence le suivi en moins d'une minute."}
-          </p>
         </div>
       </div>
 
