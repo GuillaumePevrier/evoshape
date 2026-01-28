@@ -77,10 +77,11 @@ export default function AuthPanels() {
     <main className="mx-auto w-full max-w-md px-6 pb-12 pt-8">
       <div className="flex flex-col items-center gap-4 text-center">
         <Logo
-          size="4xl"
+          size="3xl"
           showBackground={false}
           showLabel={false}
           className="flex-col"
+          imageClassName="scale-110"
         />
         <div>
           <h1 className="text-2xl font-semibold text-[var(--foreground)]">
