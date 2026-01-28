@@ -64,6 +64,7 @@ export function CalorieGauge({
           strokeLinecap="round"
           strokeDasharray={outerCirc}
           strokeDashoffset={consumedOffset}
+          className="gauge-ring"
         />
         <circle
           cx={center}
@@ -83,6 +84,7 @@ export function CalorieGauge({
           strokeLinecap="round"
           strokeDasharray={innerCirc}
           strokeDashoffset={burnedOffset}
+          className="gauge-ring"
         />
       </svg>
 
@@ -99,7 +101,8 @@ export function CalorieGauge({
             "mt-2 rounded-full px-3 py-1 text-[11px] font-semibold",
             delta > 0
               ? "bg-red-100 text-red-700"
-              : "bg-emerald-100 text-emerald-700"
+              : "bg-emerald-100 text-emerald-700",
+            delta !== 0 ? "delta-pulse" : null
           )}
         >
           {deltaLabel} kcal
