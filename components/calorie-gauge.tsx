@@ -1,3 +1,7 @@
+"use client";
+
+import { useEffect, useState } from "react";
+
 const clamp = (value: number, min: number, max: number) =>
   Math.min(Math.max(value, min), max);
 
@@ -22,10 +26,19 @@ export function CalorieGauge({
   showTargetTick = true,
   showTargetValue = true,
 }: CalorieGaugeProps) {
+  const [showTargetHint, setShowTargetHint] = useState(false);
   const safeConsumed = Number.isFinite(consumed) ? consumed : 0;
   const safeBurned = Number.isFinite(burned) ? burned : 0;
   const safeTarget = Number.isFinite(target) && target > 0 ? target : 1;
   const targetValue = Number.isFinite(target) ? Math.round(target) : 0;
+
+  useEffect(() => {
+    if (!showTargetHint) {
+      return;
+    }
+    const timeout = window.setTimeout(() => setShowTargetHint(false), 2200);
+    return () => window.clearTimeout(timeout);
+  }, [showTargetHint]);
   const consumedProgress = clamp(safeConsumed / safeTarget, 0, 1);
   const burnedProgress = clamp(safeBurned / safeTarget, 0, 1);
 
@@ -42,7 +55,7 @@ export function CalorieGauge({
 
   return (
     <div className="relative flex flex-col items-center justify-center">
-      <div className="relative">
+      <div className="group relative">
         <svg
           width={size}
           height={size}
@@ -121,11 +134,22 @@ export function CalorieGauge({
               </span>
             ) : null}
             {showTargetValue ? (
-              <span className="rounded-full border border-[var(--border)] bg-white/80 px-2 py-0.5 text-[10px] font-semibold text-[var(--foreground)]">
+              <span
+                className={`rounded-full border border-[var(--border)] bg-white/80 px-2 py-0.5 text-[10px] font-semibold text-[var(--foreground)] transition ${showTargetHint ? "opacity-100 translate-y-0" : "opacity-0 translate-y-1 group-hover:opacity-100 group-hover:translate-y-0 group-focus-within:opacity-100 group-focus-within:translate-y-0"}`}
+              >
                 {targetValue} kcal
               </span>
             ) : null}
           </div>
+        ) : null}
+
+        {showTargetValue ? (
+          <button
+            type="button"
+            className="absolute left-1/2 top-3 h-10 w-10 -translate-x-1/2 -translate-y-1/2 rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]"
+            aria-label="Afficher la valeur de l'objectif"
+            onClick={() => setShowTargetHint(true)}
+          />
         ) : null}
       </div>
 

@@ -200,10 +200,12 @@ export default function CalorieGaugeClient({
   const [mounted, setMounted] = useState(false);
   const [sheetOffset, setSheetOffset] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
+  const [sheetExpanded, setSheetExpanded] = useState(false);
   const [reportRange, setReportRange] = useState<"7" | "30">("7");
   const [activeActionId, setActiveActionId] = useState<string | null>(null);
 
   const dragStart = useRef<number | null>(null);
+  const dragDelta = useRef(0);
   const dragFrame = useRef<number | null>(null);
   const openerRef = useRef<HTMLButtonElement | null>(null);
   const sheetRef = useRef<HTMLDivElement | null>(null);
@@ -336,6 +338,7 @@ export default function CalorieGaugeClient({
   };
 
   const openSheet = () => {
+    setSheetExpanded(false);
     setSheetOpen(true);
     requestAnimationFrame(() => setSheetVisible(true));
   };
@@ -346,6 +349,7 @@ export default function CalorieGaugeClient({
     setSheetOffset(0);
     setIsDragging(false);
     setActiveActionId(null);
+    setSheetExpanded(false);
     window.setTimeout(() => setSheetOpen(false), 220);
   };
 
@@ -564,28 +568,35 @@ export default function CalorieGaugeClient({
     event.preventDefault();
     event.currentTarget.setPointerCapture(event.pointerId);
     dragStart.current = event.clientY ?? null;
+    dragDelta.current = 0;
     setIsDragging(true);
   };
 
   const handleSheetDragMove = (event: PointerEvent<HTMLDivElement>) => {
     if (dragStart.current === null) return;
     const deltaY = event.clientY - dragStart.current;
+    dragDelta.current = deltaY;
     if (dragFrame.current) {
       cancelAnimationFrame(dragFrame.current);
     }
     dragFrame.current = requestAnimationFrame(() => {
-      if (deltaY > 0) {
-        setSheetOffset(Math.min(deltaY, 240));
-      } else {
-        setSheetOffset(0);
-      }
+      const clamped = Math.max(-120, Math.min(deltaY, 240));
+      setSheetOffset(clamped);
     });
   };
 
   const handleSheetDragEnd = () => {
-    if (sheetOffset > 140) {
+    const deltaY = dragDelta.current;
+    if (deltaY > 140) {
       closeSheet();
-    } else {
+      return;
+    }
+    if (deltaY < -80) {
+      setSheetExpanded(true);
+    } else if (deltaY > 60 && sheetExpanded) {
+      setSheetExpanded(false);
+    }
+    if (sheetOffset !== 0) {
       setSheetOffset(0);
     }
     setIsDragging(false);
@@ -606,7 +617,8 @@ export default function CalorieGaugeClient({
     >
       <div
         className={cn(
-          "sheet-pop w-full max-w-md max-h-[80vh] overflow-y-auto rounded-3xl border border-[var(--border)] bg-[var(--surface)] shadow-[0_24px_70px_rgba(17,16,14,0.25)] transition-transform duration-500"
+          "sheet-pop w-full max-w-md overflow-y-auto rounded-3xl border border-[var(--border)] bg-[var(--surface)] shadow-[0_24px_70px_rgba(17,16,14,0.25)] transition-[transform,max-height] duration-500",
+          sheetExpanded ? "max-h-[92vh]" : "max-h-[70vh]"
         )}
         style={{
           transform: `translateY(${sheetOffset + (sheetVisible ? 0 : 24)}px)`,
@@ -660,14 +672,24 @@ export default function CalorieGaugeClient({
                 Retour
               </Button>
             ) : (
-              <Button
-                type="button"
-                size="sm"
-                variant="ghost"
-                onClick={closeSheet}
-              >
-                Fermer
-              </Button>
+              <div className="flex items-center gap-2">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => setSheetExpanded((prev) => !prev)}
+                >
+                  {sheetExpanded ? "Reduire" : "Agrandir"}
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  onClick={closeSheet}
+                >
+                  Fermer
+                </Button>
+              </div>
             )}
           </div>
         </div>
@@ -1074,6 +1096,51 @@ export default function CalorieGaugeClient({
               {Math.abs(trendDelta).toFixed(0)} kcal vs hier
             </div>
           ) : null}
+        </div>
+      </Card>
+
+      <Card className="space-y-3">
+        <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--muted)]">
+          Actions rapides
+        </p>
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[var(--muted)]">
+            Repas
+          </span>
+          {QUICK_MEALS.slice(0, 2).map((calories) => (
+            <Button
+              key={`meal-${calories}`}
+              type="button"
+              size="sm"
+              variant="soft"
+              disabled={saving}
+              onClick={() => handleAddMeal({ calories })}
+            >
+              +{calories}
+            </Button>
+          ))}
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[var(--muted)]">
+            Sport
+          </span>
+          {QUICK_ACTIVITIES.slice(0, 2).map((activity) => (
+            <Button
+              key={`activity-${activity.label}`}
+              type="button"
+              size="sm"
+              variant="outline"
+              disabled={saving}
+              onClick={() =>
+                handleAddActivity({
+                  calories: activity.calories,
+                  type: activity.label,
+                })
+              }
+            >
+              {activity.label} -{activity.calories}
+            </Button>
+          ))}
         </div>
       </Card>
 
