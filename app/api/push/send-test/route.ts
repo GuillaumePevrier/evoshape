@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createSupabaseServerClient } from "@/src/lib/supabase/server";
 import { sendTestNotification } from "@/src/lib/push/send-test";
+import { getSupabaseServerEnvStatus, logMissingServerEnv } from "@/src/lib/env/server";
 
 type Payload = {
   title?: string;
@@ -9,6 +10,15 @@ type Payload = {
 };
 
 export async function POST(request: Request) {
+  const envStatus = getSupabaseServerEnvStatus();
+  if (!envStatus.ok) {
+    logMissingServerEnv("api/push/send-test", envStatus.missing);
+    return NextResponse.json(
+      { error: "Missing server environment configuration" },
+      { status: 500 }
+    );
+  }
+
   const supabase = await createSupabaseServerClient();
   const { data: authData, error: authError } = await supabase.auth.getUser();
 
@@ -20,6 +30,11 @@ export async function POST(request: Request) {
   const apiKey = process.env.ONESIGNAL_REST_API_KEY ?? "";
 
   if (!appId || !apiKey) {
+    // eslint-disable-next-line no-console
+    console.error("[api/push/send-test] missing OneSignal env", {
+      hasAppId: Boolean(appId),
+      hasApiKey: Boolean(apiKey),
+    });
     return NextResponse.json(
       { error: "OneSignal server env missing" },
       { status: 500 }

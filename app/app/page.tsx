@@ -49,6 +49,25 @@ export default async function CalorieGaugePage() {
     supabase.auth.getUser(),
   ]);
 
+  if (profileError || mealError || activityError || weightError) {
+    // eslint-disable-next-line no-console
+    console.error("[app/page] supabase errors", {
+      profile: profileError?.message,
+      meals: mealError?.message,
+      activities: activityError?.message,
+      weights: weightError?.message,
+    });
+  }
+
+  // eslint-disable-next-line no-console
+  console.info("[app/page] dashboard data loaded", {
+    hasUser: Boolean(userData.user),
+    hasProfile: Boolean(profile),
+    mealsCount: meals?.length ?? 0,
+    activitiesCount: activities?.length ?? 0,
+    weightsCount: weights?.length ?? 0,
+  });
+
   const errorMessage =
     profileError?.message ??
     mealError?.message ??

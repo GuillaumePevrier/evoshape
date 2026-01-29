@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createSupabaseServerClient } from "@/src/lib/supabase/server";
 import { upsertSubscription } from "@/src/lib/push/subscribe-handler";
+import { getSupabaseServerEnvStatus, logMissingServerEnv } from "@/src/lib/env/server";
 
 type Payload = {
   subscriptionId?: string;
@@ -11,6 +12,15 @@ type Payload = {
 };
 
 export async function POST(request: Request) {
+  const envStatus = getSupabaseServerEnvStatus();
+  if (!envStatus.ok) {
+    logMissingServerEnv("api/push/subscribe", envStatus.missing);
+    return NextResponse.json(
+      { error: "Missing server environment configuration" },
+      { status: 500 }
+    );
+  }
+
   const supabase = await createSupabaseServerClient();
   const { data: authData, error: authError } = await supabase.auth.getUser();
 
