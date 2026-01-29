@@ -4,8 +4,20 @@ import { redirect } from "next/navigation";
 import { Logo } from "@/components/logo";
 import { OneSignalSessionSync } from "@/components/app/onesignal-session-sync";
 import { createSupabaseServerClient } from "@/src/lib/supabase/server";
+import EnvFallback from "./env-fallback";
+import { getSupabaseServerEnvStatus, logMissingServerEnv } from "@/src/lib/env/server";
 
 export default async function AppLayout({ children }: { children: ReactNode }) {
+  const envStatus = getSupabaseServerEnvStatus();
+  if (!envStatus.ok) {
+    logMissingServerEnv("app/layout", envStatus.missing);
+    return (
+      <div className="min-h-screen">
+        <EnvFallback missing={envStatus.missing} />
+      </div>
+    );
+  }
+
   const supabase = await createSupabaseServerClient();
   const { data } = await supabase.auth.getUser();
 

@@ -52,7 +52,21 @@ export async function GET(
   const url = new URL(`${FDC_API_BASE}/food/${fdcId}`);
   url.searchParams.set("api_key", apiKey);
 
-  const response = await fetch(url, { cache: "no-store" });
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 8000);
+  let response: Response;
+  try {
+    response = await fetch(url, { cache: "no-store", signal: controller.signal });
+  } catch (error) {
+    // eslint-disable-next-line no-console
+    console.error("[api/food/detail] fetch failed", {
+      message: error instanceof Error ? error.message : String(error),
+    });
+    return NextResponse.json({ error: "FDC lookup failed" }, { status: 502 });
+  } finally {
+    clearTimeout(timeoutId);
+  }
+
   if (!response.ok) {
     return NextResponse.json(
       { error: "FDC lookup failed" },

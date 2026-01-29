@@ -33,7 +33,24 @@ export async function GET(request: NextRequest) {
   searchUrl.searchParams.set("query", query);
   searchUrl.searchParams.set("pageSize", String(limit));
 
-  const response = await fetch(searchUrl, { cache: "no-store" });
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 8000);
+  let response: Response;
+  try {
+    response = await fetch(searchUrl, {
+      cache: "no-store",
+      signal: controller.signal,
+    });
+  } catch (error) {
+    // eslint-disable-next-line no-console
+    console.error("[api/food/search] fetch failed", {
+      message: error instanceof Error ? error.message : String(error),
+    });
+    return NextResponse.json({ error: "FDC search failed" }, { status: 502 });
+  } finally {
+    clearTimeout(timeoutId);
+  }
+
   if (!response.ok) {
     return NextResponse.json(
       { error: "FDC search failed" },
